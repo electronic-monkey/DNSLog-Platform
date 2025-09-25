@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}API Token 管理 - DNSLog Platform{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-key"></i> API Token 管理</h2>
+    <div class="d-flex gap-2">
+      <input id="t_name" class="form-control" placeholder="备注名称(可空)" style="max-width:240px;" />
+      <select id="t_scope" class="form-select" style="max-width:160px;">
+        <option value="api">API（读写）</option>
+        <option value="read">只读</option>
+        <option value="admin">管理</option>
+      </select>
+      <input id="t_ttl" class="form-control" placeholder="有效天数(可空)" style="max-width:160px;" />
+      <button class="btn btn-primary" onclick="createToken()">
+          <i class="bi bi-plus-circle"></i> 新建Token
+      </button>
+    </div>
+  </div>
+
+<div class="card">
+  <div class="card-body">
+    <div id="new-token-alert" class="alert alert-warning alert-dismissible fade show" role="alert" style="display:none;"></div>
+    <div id="tokens-container"></div>
+  </div>
+  </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', loadTokens);
+
+function loadTokens() {
+  const alertDiv = document.getElementById('new-token-alert');
+  alertDiv.style.display = 'none';
+  alertDiv.innerHTML = '';
+  fetch('/auth/api/tokens').then(r => r.json()).then(data => {
+    if (!data.success) { showToast('获取Token失败', 'error'); return; }
+    const list = data.tokens;
+    let html = '';
+    if (list.length === 0) {
+      html = '<div class="text-muted">暂无Token，请新建。</div>';
+    } else {
+      html += '<div class="table-responsive"><table class="table"><thead><tr><th>ID</th><th>名称</th><th>创建时间</th><th>最近使用</th><th>状态</th><th>操作</th></tr></thead><tbody>';
+      list.forEach(t => {
+        html += `<tr>
+          <td>${t.id}</td>
+          <td>${t.name || '-'}</td>
+          <td>${t.created_at}</td>
+          <td>${t.last_used_at || '-'}</td>
+          <td>${t.is_active ? '<span class="badge bg-success">启用</span>' : '<span class="badge bg-secondary">停用</span>'}</td>
+          <td>
+            <button class="btn btn-sm btn-outline-danger" onclick="deleteToken(${t.id})"><i class="bi bi-trash"></i> 删除</button>
+          </td>
+        </tr>`;
+      });
+      html += '</tbody></table></div>';
+    }
+    document.getElementById('tokens-container').innerHTML = html;
+  }).catch(() => showToast('获取Token失败', 'error'));
+}
+
+function createToken() {
+  const name = document.getElementById('t_name').value || '';
+  const scope = document.getElementById('t_scope').value || 'api';
+  const ttl_days = document.getElementById('t_ttl').value || '';
+  fetch('/auth/api/tokens', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, scope, ttl_days}) })
+    .then(r => r.json()).then(data => {
+      if (!data.success) { showToast('创建失败', 'error'); return; }
+      const alertDiv = document.getElementById('new-token-alert');
+      const raw = data.raw_token || '';
+      alertDiv.innerHTML = `
+        <strong>请妥善保存此 Token（仅显示一次）：</strong>
+        <code class="user-select-all">${raw}</code>
+        <button class="btn btn-sm btn-outline-secondary ms-2" type="button" onclick="copyRawToken('${raw}')"><i class="bi bi-clipboard"></i> 复制</button>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      `;
+      alertDiv.style.display = 'block';
+      // 自动隐藏（30秒）
+      setTimeout(() => { try { alertDiv.style.display='none'; alertDiv.innerHTML=''; } catch(e){} }, 30000);
+      loadTokens();
+    }).catch(() => showToast('创建失败', 'error'));
+}
+
+function deleteToken(id) {
+  if (!confirm('确定删除此Token吗？')) return;
+  fetch('/auth/api/tokens/' + id, { method: 'DELETE' })
+    .then(r => r.json()).then(data => {
+      if (!data.success) { showToast('删除失败', 'error'); return; }
+      showToast('已删除', 'success');
+      loadTokens();
+    }).catch(() => showToast('删除失败', 'error'));
+}
+
+function copyRawToken(v){
+  if(!v){ showToast('无可复制内容','warning'); return; }
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(v).then(()=>showToast('已复制','success')).catch(()=>copyToClipboard(v));
+  } else { copyToClipboard(v); }
+}
+</script>
+{% endblock %}
+
+

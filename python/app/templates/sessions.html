@@ -1,0 +1,537 @@
+{% extends "base.html" %}
+
+{% block title %}会话管理 - DNSLog Platform{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>
+        <i class="bi bi-collection"></i>
+        会话管理
+    </h2>
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createSessionModal">
+        <i class="bi bi-plus-circle"></i> 创建新会话
+    </button>
+</div>
+
+<!-- 会话统计 -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h4 id="total-sessions">-</h4>
+                <p class="text-muted mb-0">总会话数</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h4 id="active-sessions">-</h4>
+                <p class="text-muted mb-0">活跃会话</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h4 id="total-session-logs">-</h4>
+                <p class="text-muted mb-0">会话日志总数</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h4 id="avg-logs-per-session">-</h4>
+                <p class="text-muted mb-0">平均日志数</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 搜索和筛选 -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <input type="text" class="form-control" id="search-sessions" placeholder="搜索会话名称或描述...">
+            </div>
+            <div class="col-md-3">
+                <select class="form-select" id="sort-sessions">
+                    <option value="last_activity">按最后活动时间</option>
+                    <option value="created_at">按创建时间</option>
+                    <option value="name">按名称</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <div class="btn-group w-100">
+                    <button type="button" class="btn btn-outline-primary" onclick="searchSessions()">
+                        <i class="bi bi-search"></i> 搜索
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="refreshSessions()">
+                        <i class="bi bi-arrow-clockwise"></i> 刷新
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 会话列表 -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">会话列表</h6>
+        <div class="d-flex align-items-center">
+            <label for="sessions-per-page" class="form-label me-2 mb-0">每页显示:</label>
+            <select class="form-select form-select-sm" id="sessions-per-page" style="width: auto;" onchange="changePerPage()">
+                <option value="10">10</option>
+                <option value="20" selected>20</option>
+                <option value="50">50</option>
+            </select>
+        </div>
+    </div>
+    <div class="card-body">
+        <div id="sessions-container">
+            <div class="loading">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">加载中...</span>
+                </div>
+                <p class="mt-2">正在加载会话...</p>
+            </div>
+        </div>
+        
+        <!-- 分页 -->
+        <nav id="sessions-pagination-nav" style="display: none;">
+            <ul class="pagination justify-content-center" id="sessions-pagination">
+            </ul>
+        </nav>
+    </div>
+</div>
+
+<!-- 创建会话模态框 -->
+<div class="modal fade" id="createSessionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">创建新会话</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="create-session-form">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="session-name" class="form-label">会话名称 <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="session-name" required 
+                               placeholder="例如：SSRF测试-example.com">
+                    </div>
+                    <div class="mb-3">
+                        <label for="session-description" class="form-label">描述</label>
+                        <textarea class="form-control" id="session-description" rows="3" 
+                                  placeholder="详细描述测试目标、方法等信息..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> 创建会话
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 会话详情模态框 -->
+<div class="modal fade" id="sessionDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">会话详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="session-detail-content">
+                <!-- 详情内容将在这里显示 -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentPage = 1;
+let currentPerPage = 20;
+let currentSort = 'last_activity';
+let searchQuery = '';
+let totalPages = 1;
+
+// 页面加载时初始化
+document.addEventListener('DOMContentLoaded', function() {
+    loadSessions();
+    
+    // 设置表单提交事件
+    document.getElementById('create-session-form').addEventListener('submit', handleCreateSession);
+    
+    // 设置搜索输入事件
+    document.getElementById('search-sessions').addEventListener('input', debounce(searchSessions, 500));
+    document.getElementById('sort-sessions').addEventListener('change', searchSessions);
+});
+
+// 防抖函数
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// 加载会话列表
+function loadSessions(page = 1) {
+    currentPage = page;
+    
+    const params = new URLSearchParams({
+        page: page,
+        per_page: currentPerPage
+    });
+    
+    fetch(`/api/sessions?${params}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displaySessions(data.sessions);
+                updateSessionsPagination(data.pagination);
+                updateSessionsStats(data);
+            } else {
+                showToast('加载会话失败: ' + data.message, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('加载会话失败:', error);
+            showToast('加载会话失败', 'error');
+        });
+}
+
+// 显示会话列表
+function displaySessions(sessions) {
+    const container = document.getElementById('sessions-container');
+    
+    if (sessions.length === 0) {
+        container.innerHTML = `
+            <div class="text-center text-muted py-5">
+                <i class="bi bi-collection" style="font-size: 3rem;"></i>
+                <h5 class="mt-3">暂无会话</h5>
+                <p>点击"创建新会话"开始您的第一个测试会话</p>
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createSessionModal">
+                    <i class="bi bi-plus-circle"></i> 创建新会话
+                </button>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '';
+    sessions.forEach(session => {
+        const createdAt = new Date(session.created_at);
+        const lastActivity = new Date(session.last_activity);
+        const isRecent = (Date.now() - lastActivity.getTime()) < 24 * 60 * 60 * 1000; // 24小时内
+        
+        html += `
+            <div class="card mb-3 session-card" data-session-id="${session.id}">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center">
+                                <div class="me-3">
+                                    <i class="bi bi-collection text-primary" style="font-size: 1.5rem;"></i>
+                                </div>
+                                <div>
+                                    <h6 class="mb-1">${session.name}</h6>
+                                    <p class="text-muted mb-0">${session.description || '无描述'}</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-2 text-center">
+                            <div class="session-stats">
+                                <h5 class="mb-1">${session.dns_logs_count}</h5>
+                                <small class="text-muted">DNS日志</small>
+                            </div>
+                        </div>
+                        <div class="col-md-2 text-center">
+                            <small class="text-muted">创建时间</small>
+                            <div class="timestamp">${formatTimestamp(session.created_at)}</div>
+                        </div>
+                        <div class="col-md-2 text-end">
+                            <div class="btn-group">
+                                <button class="btn btn-sm btn-outline-primary" onclick="viewSession('${session.id}')">
+                                    <i class="bi bi-eye"></i> 查看
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="copySessionId('${session.id}')">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                            </div>
+                            ${isRecent ? '<span class="badge bg-success mt-2">活跃</span>' : ''}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+// 更新会话分页
+function updateSessionsPagination(pagination) {
+    totalPages = pagination.pages;
+    currentPage = pagination.page;
+    
+    const nav = document.getElementById('sessions-pagination-nav');
+    const paginationUl = document.getElementById('sessions-pagination');
+    
+    if (totalPages <= 1) {
+        nav.style.display = 'none';
+        return;
+    }
+    
+    nav.style.display = 'block';
+    
+    let html = '';
+    
+    // 上一页
+    if (currentPage > 1) {
+        html += `<li class="page-item">
+            <a class="page-link" href="#" onclick="loadSessions(${currentPage - 1})">上一页</a>
+        </li>`;
+    }
+    
+    // 页码
+    const startPage = Math.max(1, currentPage - 2);
+    const endPage = Math.min(totalPages, currentPage + 2);
+    
+    for (let i = startPage; i <= endPage; i++) {
+        const active = i === currentPage ? 'active' : '';
+        html += `<li class="page-item ${active}">
+            <a class="page-link" href="#" onclick="loadSessions(${i})">${i}</a>
+        </li>`;
+    }
+    
+    // 下一页
+    if (currentPage < totalPages) {
+        html += `<li class="page-item">
+            <a class="page-link" href="#" onclick="loadSessions(${currentPage + 1})">下一页</a>
+        </li>`;
+    }
+    
+    paginationUl.innerHTML = html;
+}
+
+// 更新会话统计
+function updateSessionsStats(data) {
+    document.getElementById('total-sessions').textContent = data.pagination.total;
+    
+    // 计算活跃会话数（有日志记录的会话）
+    const activeSessions = data.sessions.filter(s => s.dns_logs_count > 0).length;
+    document.getElementById('active-sessions').textContent = activeSessions;
+    
+    // 计算总日志数
+    const totalLogs = data.sessions.reduce((sum, s) => sum + s.dns_logs_count, 0);
+    document.getElementById('total-session-logs').textContent = totalLogs;
+    
+    // 计算平均日志数
+    const avgLogs = data.pagination.total > 0 ? (totalLogs / data.pagination.total).toFixed(1) : '0';
+    document.getElementById('avg-logs-per-session').textContent = avgLogs;
+}
+
+// 搜索会话
+function searchSessions() {
+    searchQuery = document.getElementById('search-sessions').value.trim();
+    currentSort = document.getElementById('sort-sessions').value;
+    
+    // 这里应该发送搜索请求到后端，暂时使用本地筛选
+    loadSessions(1);
+}
+
+// 刷新会话列表
+function refreshSessions() {
+    loadSessions(currentPage);
+    showToast('会话列表已刷新', 'success');
+}
+
+// 改变每页显示数量
+function changePerPage() {
+    currentPerPage = parseInt(document.getElementById('sessions-per-page').value);
+    loadSessions(1);
+}
+
+// 处理创建会话
+function handleCreateSession(event) {
+    event.preventDefault();
+    
+    const name = document.getElementById('session-name').value.trim();
+    const description = document.getElementById('session-description').value.trim();
+    
+    if (!name) {
+        showToast('请输入会话名称', 'warning');
+        return;
+    }
+    
+    const sessionData = {
+        name: name,
+        description: description
+    };
+    
+    fetch('/api/session', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(sessionData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('会话创建成功', 'success');
+            
+            // 关闭模态框
+            const modal = bootstrap.Modal.getInstance(document.getElementById('createSessionModal'));
+            modal.hide();
+            
+            // 清空表单
+            document.getElementById('create-session-form').reset();
+            
+            // 刷新会话列表
+            loadSessions(1);
+        } else {
+            showToast('创建失败: ' + data.message, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('创建失败:', error);
+        showToast('创建失败', 'error');
+    });
+}
+
+// 查看会话详情
+function viewSession(sessionId) {
+    fetch(`/api/session/${sessionId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displaySessionDetail(data.session);
+            } else {
+                showToast('获取会话详情失败: ' + data.message, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('获取会话详情失败:', error);
+            showToast('获取会话详情失败', 'error');
+        });
+}
+
+// 显示会话详情
+function displaySessionDetail(session) {
+    const content = document.getElementById('session-detail-content');
+    
+    content.innerHTML = `
+        <div class="row">
+            <div class="col-md-6">
+                <h6>基本信息</h6>
+                <table class="table table-sm">
+                    <tr>
+                        <td><strong>会话ID:</strong></td>
+                        <td>
+                            <code>${session.id}</code>
+                            <button class="btn btn-link btn-sm" onclick="copyToClipboard('${session.id}')">
+                                <i class="bi bi-clipboard"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>名称:</strong></td>
+                        <td>${session.name}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>描述:</strong></td>
+                        <td>${session.description || '无描述'}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>创建时间:</strong></td>
+                        <td>${formatTimestamp(session.created_at)}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>最后活动:</strong></td>
+                        <td>${formatTimestamp(session.last_activity)}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>DNS日志数:</strong></td>
+                        <td>${session.dns_logs_count}</td>
+                    </tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h6>快速操作</h6>
+                <div class="d-grid gap-2">
+                    <button class="btn btn-primary" onclick="generateSessionSubdomain('${session.id}')">
+                        <i class="bi bi-plus-circle"></i> 生成测试子域名
+                    </button>
+                    <button class="btn btn-outline-primary" onclick="viewSessionLogs('${session.id}')">
+                        <i class="bi bi-list-ul"></i> 查看此会话的日志
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="copySessionId('${session.id}')">
+                        <i class="bi bi-clipboard"></i> 复制会话ID
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 显示模态框
+    const modal = new bootstrap.Modal(document.getElementById('sessionDetailModal'));
+    modal.show();
+}
+
+// 为会话生成子域名
+function generateSessionSubdomain(sessionId) {
+    const subdomainData = {
+        type: "test",
+        session_id: sessionId
+    };
+    
+    fetch('/api/subdomain/generate', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(subdomainData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('子域名生成成功', 'success');
+            copyToClipboard(data.full_domain);
+        } else {
+            showToast('生成失败: ' + data.message, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('生成失败:', error);
+        showToast('生成失败', 'error');
+    });
+}
+
+// 查看会话日志
+function viewSessionLogs(sessionId) {
+    window.location.href = `/logs?session_id=${sessionId}`;
+}
+
+// 复制会话ID
+function copySessionId(sessionId) {
+    copyToClipboard(sessionId);
+    showToast('会话ID已复制', 'success');
+}
+</script>
+{% endblock %}

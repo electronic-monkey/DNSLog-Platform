@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block title %}系统设置 - DNSLog Platform{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2><i class="bi bi-gear"></i> 系统设置</h2>
+  <div>
+    <button class="btn btn-outline-primary" onclick="loadSettings()"><i class="bi bi-arrow-clockwise"></i> 刷新</button>
+    <button class="btn btn-primary" onclick="saveSettings()"><i class="bi bi-save"></i> 保存</button>
+    <button class="btn btn-danger" onclick="restartConfirm()"><i class="bi bi-power"></i> 保存并重启</button>
+  </div>
+  </div>
+
+<div class="row g-3">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">域名与解析</div>
+      <div class="card-body">
+        <div class="mb-3">
+          <label class="form-label">主域名 <span class="text-muted small">(DOMAIN)</span></label>
+          <input id="DOMAIN" class="form-control" placeholder="例如 dns.example.com" />
+          <div class="form-text">用作所有生成子域名的根域，例如 test.<strong>dns.example.com</strong></div>
+        </div>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">主 NS 域名 <span class="text-muted small">(NS1_DOMAIN)</span></label>
+            <input id="NS1_DOMAIN" class="form-control" placeholder="例如 ns1.example.com" />
+            <div class="form-text">在域名服务商 NS 记录中指向此主 NS</div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">备 NS 域名 <span class="text-muted small">(NS2_DOMAIN)</span></label>
+            <input id="NS2_DOMAIN" class="form-control" placeholder="例如 ns2.example.com" />
+            <div class="form-text">可选的副 NS 记录</div>
+          </div>
+        </div>
+        <div class="row g-3 mt-1">
+          <div class="col-md-6">
+            <label class="form-label">NS 服务器 IP <span class="text-muted small">(NS_IP)</span></label>
+            <input id="NS_IP" class="form-control" placeholder="例如 1.2.3.4" />
+            <div class="form-text">ns1/ns2 的 A 记录所指向的 IP</div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">A 记录 IP <span class="text-muted small">(A_RECORD_IP)</span></label>
+            <input id="A_RECORD_IP" class="form-control" placeholder="例如 1.2.3.4" />
+            <div class="form-text">普通子域名解析返回的 IP（用于联通性检测）</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">服务端口</div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">DNS 监听地址 <span class="text-muted small">(DNS_SERVER_HOST)</span></label>
+            <input id="DNS_SERVER_HOST" class="form-control" placeholder="一般为 0.0.0.0" />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">DNS 端口 <span class="text-muted small">(DNS_SERVER_PORT)</span></label>
+            <input id="DNS_SERVER_PORT" type="number" class="form-control" placeholder="默认 53" />
+          </div>
+        </div>
+        <div class="row g-3 mt-1">
+          <div class="col-md-6">
+            <label class="form-label">Web 监听地址 <span class="text-muted small">(WEB_SERVER_HOST)</span></label>
+            <input id="WEB_SERVER_HOST" class="form-control" placeholder="一般为 0.0.0.0" />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Web 端口 <span class="text-muted small">(WEB_SERVER_PORT)</span></label>
+            <input id="WEB_SERVER_PORT" type="number" class="form-control" placeholder="默认 8000" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header">数据库与保留策略</div>
+      <div class="card-body">
+        <div class="mb-3">
+          <label class="form-label">数据库连接字符串 <span class="text-muted small">(SQLALCHEMY_DATABASE_URI)</span></label>
+          <input id="SQLALCHEMY_DATABASE_URI" class="form-control" placeholder="例如 sqlite:///dnslog.db" />
+          <div class="form-text">如需迁移到其它数据库请按 SQLAlchemy DSN 格式填写</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">日志保留天数 <span class="text-muted small">(LOG_RETENTION_DAYS)</span></label>
+          <input id="LOG_RETENTION_DAYS" type="number" class="form-control" placeholder="默认 7" />
+          <div class="form-text">超过保留期的旧日志会在启动时自动清理</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+async function loadSettings(){
+  const r = await fetch('/api/settings'); const d = await r.json(); if(!d.success){ showToast(d.message||'加载失败','error'); return; }
+  const s = d.settings || {}; Object.keys(s).forEach(k=>{ const el=document.getElementById(k); if(el){ el.value = s[k]; }});
+}
+function isIP(v){ return /^(\d{1,3}\.){3}\d{1,3}$/.test(v); }
+function isHostname(v){ return /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/.test(v); }
+function isPort(n){ const x=Number(n); return Number.isInteger(x) && x>0 && x<65536; }
+function nonEmpty(v){ return v!=null && String(v).trim()!==''; }
+
+function validateForm(){
+  const errs=[];
+  const DOMAIN=document.getElementById('DOMAIN').value.trim(); if(!nonEmpty(DOMAIN)||!isHostname(DOMAIN)) errs.push('主域名格式不正确');
+  const NS1=document.getElementById('NS1_DOMAIN').value.trim(); if(NS1 && !isHostname(NS1)) errs.push('主 NS 域名格式不正确');
+  const NS2=document.getElementById('NS2_DOMAIN').value.trim(); if(NS2 && !isHostname(NS2)) errs.push('备 NS 域名格式不正确');
+  const NS_IP=document.getElementById('NS_IP').value.trim(); if(NS_IP && !isIP(NS_IP)) errs.push('NS 服务器 IP 格式不正确');
+  const A_IP=document.getElementById('A_RECORD_IP').value.trim(); if(A_IP && !isIP(A_IP)) errs.push('A 记录 IP 格式不正确');
+  const D_HOST=document.getElementById('DNS_SERVER_HOST').value.trim(); if(D_HOST && !(isIP(D_HOST)||D_HOST==='0.0.0.0')) errs.push('DNS 监听地址建议使用 0.0.0.0 或有效 IP');
+  const D_PORT=document.getElementById('DNS_SERVER_PORT').value.trim(); if(D_PORT && !isPort(D_PORT)) errs.push('DNS 端口无效');
+  const W_HOST=document.getElementById('WEB_SERVER_HOST').value.trim(); if(W_HOST && !(isIP(W_HOST)||W_HOST==='0.0.0.0')) errs.push('Web 监听地址建议使用 0.0.0.0 或有效 IP');
+  const W_PORT=document.getElementById('WEB_SERVER_PORT').value.trim(); if(W_PORT && !isPort(W_PORT)) errs.push('Web 端口无效');
+  const RET=document.getElementById('LOG_RETENTION_DAYS').value.trim(); if(RET && (!/^[0-9]+$/.test(RET) || Number(RET)<1 || Number(RET)>3650)) errs.push('日志保留天数需在 1-3650');
+  return errs;
+}
+
+async function saveSettings(){
+  const errs = validateForm();
+  if(errs.length){ showToast(errs.join('；'),'warning'); return; }
+  const keys=['DOMAIN','NS1_DOMAIN','NS2_DOMAIN','NS_IP','A_RECORD_IP','DNS_SERVER_HOST','DNS_SERVER_PORT','WEB_SERVER_HOST','WEB_SERVER_PORT','SQLALCHEMY_DATABASE_URI','LOG_RETENTION_DAYS'];
+  const payload={}; keys.forEach(k=>{ const el=document.getElementById(k); if(el){ const v=el.value; if(v!==''&&v!=null) payload[k]= (k.endsWith('_PORT')||k==='LOG_RETENTION_DAYS')? Number(v): v; }});
+  const r = await fetch('/api/settings',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+  const d = await r.json(); if(d.success){ showToast('保存成功，需要重启生效','success'); } else { showToast(d.message||'保存失败','error'); }
+}
+function restartConfirm(){ saveSettings().then(()=>{ alert('已保存。请执行: bash /root/SSRF/scripts/stop.sh && bash /root/SSRF/scripts/start.sh 以重启使配置生效'); }); }
+loadSettings();
+</script>
+{% endblock %}
+
+

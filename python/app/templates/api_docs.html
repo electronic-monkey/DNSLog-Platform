@@ -1,0 +1,457 @@
+{% extends "base.html" %}
+
+{% block title %}API文档 - DNSLog Platform{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-3">
+        <!-- 侧边栏导航 -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">API文档导航</h6>
+            </div>
+            <div class="list-group list-group-flush">
+                <a href="#overview" class="list-group-item list-group-item-action">概述</a>
+                <a href="#authentication" class="list-group-item list-group-item-action">认证</a>
+                <a href="#sessions" class="list-group-item list-group-item-action">会话管理</a>
+                <a href="#subdomains" class="list-group-item list-group-item-action">子域名生成</a>
+                <a href="#logs" class="list-group-item list-group-item-action">日志查询</a>
+                <a href="#stats" class="list-group-item list-group-item-action">统计信息</a>
+                <a href="#examples" class="list-group-item list-group-item-action">使用示例</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-9">
+        <!-- API文档内容 -->
+        <h1 class="mb-4">
+            <i class="bi bi-code-slash"></i>
+            DNSLog Platform API 文档
+        </h1>
+        
+        <!-- 概述 -->
+        <section id="overview" class="mb-5">
+            <h2>概述</h2>
+            <p>DNSLog Platform 提供 RESTful API 接口，用于SSRF漏洞检测工具对接。所有API返回JSON格式数据。</p>
+            
+            <h4>基础URL</h4>
+            <div class="alert alert-info">
+                <code id="base-url">http://localhost:5000/api</code>
+                <button class="btn btn-link btn-sm" onclick="copyToClipboard(document.getElementById('base-url').textContent)">
+                    <i class="bi bi-clipboard"></i>
+                </button>
+            </div>
+            
+            <h4>响应格式</h4>
+            <pre><code>{
+  "success": true,
+  "data": {...},
+  "message": "操作成功"
+}</code></pre>
+        </section>
+        
+        <!-- 认证 -->
+        <section id="authentication" class="mb-5">
+            <h2>认证</h2>
+            <p>支持两种方式：</p>
+            <ul>
+                <li>登录会话（浏览器已登录管理员）</li>
+                <li>Bearer Token：在“用户资料 → API Token 管理”创建，放入请求头 <code>Authorization: Bearer &lt;token&gt;</code></li>
+            </ul>
+            <div class="alert alert-info">示例：<code>curl -H "Authorization: Bearer YOUR_TOKEN" http://host:8000/api/logs</code></div>
+        </section>
+        
+        <!-- 会话管理 -->
+        <section id="sessions" class="mb-5">
+            <h2>会话管理</h2>
+            
+            <h4>创建会话</h4>
+            <div class="card mb-3">
+                <div class="card-header">
+                    <code>POST /api/session</code>
+                </div>
+                <div class="card-body">
+                    <p>创建新的测试会话，用于组织和管理DNS查询记录。</p>
+                    
+                    <h6>请求体：</h6>
+                    <pre><code>{
+  "name": "SSRF测试会话",
+  "description": "针对目标网站的SSRF漏洞检测"
+}</code></pre>
+                    
+                    <h6>响应：</h6>
+                    <pre><code>{
+  "success": true,
+  "session": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "name": "SSRF测试会话",
+    "description": "针对目标网站的SSRF漏洞检测",
+    "created_at": "2023-10-01T12:00:00.000000",
+    "last_activity": "2023-10-01T12:00:00.000000",
+    "dns_logs_count": 0
+  },
+  "message": "会话创建成功"
+}</code></pre>
+                    
+                    <button class="btn btn-primary btn-sm" onclick="testCreateSession()">
+                        <i class="bi bi-play"></i> 测试此API
+                    </button>
+                </div>
+            </div>
+            
+            <h4>获取会话信息</h4>
+            <div class="card mb-3">
+                <div class="card-header">
+                    <code>GET /api/session/{session_id}</code>
+                </div>
+                <div class="card-body">
+                    <p>获取指定会话的详细信息。</p>
+                    
+                    <h6>路径参数：</h6>
+                    <ul>
+                        <li><code>session_id</code> - 会话ID</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <h4>获取所有会话</h4>
+            <div class="card mb-3">
+                <div class="card-header">
+                    <code>GET /api/sessions</code>
+                </div>
+                <div class="card-body">
+                    <p>获取所有会话的列表，支持分页。</p>
+                    
+                    <h6>查询参数：</h6>
+                    <ul>
+                        <li><code>page</code> - 页码（默认：1）</li>
+                        <li><code>per_page</code> - 每页数量（默认：20）</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+        
+        <!-- 子域名生成 -->
+        <section id="subdomains" class="mb-5">
+            <h2>子域名生成</h2>
+            
+            <h4>生成测试子域名</h4>
+            <div class="card mb-3">
+                <div class="card-header">
+                    <code>POST /api/subdomain/generate</code>
+                </div>
+                <div class="card-body">
+                    <p>生成用于SSRF测试的随机子域名。</p>
+                    
+                    <h6>请求体：</h6>
+                    <pre><code>{
+  "type": "ssrf",
+  "session_id": "550e8400-e29b-41d4-a716-446655440000",
+  "length": 12
+}</code></pre>
+                    
+                    <h6>参数说明：</h6>
+                    <ul>
+                        <li><code>type</code> - payload类型：test, ssrf, rce, lfi, sqli, xss, xxe</li>
+                        <li><code>session_id</code> - 会话ID（可选）</li>
+                        <li><code>length</code> - 子域名长度，8-32位（可选）</li>
+                    </ul>
+                    
+                    <h6>响应：</h6>
+                    <pre><code>{
+  "success": true,
+  "subdomain": "ssrf-abc123def456",
+  "full_domain": "ssrf-abc123def456.cyj520.icu",
+  "domain": "cyj520.icu",
+  "session_id": "550e8400-e29b-41d4-a716-446655440000",
+  "type": "ssrf"
+}</code></pre>
+                    
+                    <button class="btn btn-primary btn-sm" onclick="testGenerateSubdomain()">
+                        <i class="bi bi-play"></i> 测试此API
+                    </button>
+                </div>
+            </div>
+        </section>
+        
+        <!-- 日志查询 -->
+        <section id="logs" class="mb-5">
+            <h2>日志查询</h2>
+            
+            <h4>获取DNS日志</h4>
+            <div class="card mb-3">
+                <div class="card-header">
+                    <code>GET /api/logs</code>
+                </div>
+                <div class="card-body">
+                    <p>获取DNS查询日志，支持多种筛选条件。</p>
+                    
+                    <h6>查询参数：</h6>
+                    <ul>
+                        <li><code>page</code> - 页码（默认：1）</li>
+                        <li><code>per_page</code> - 每页数量（默认：50）</li>
+                        <li><code>session_id</code> - 会话ID筛选</li>
+                        <li><code>subdomain</code> - 子域名模糊搜索</li>
+                        <li><code>client_ip</code> - 客户端IP筛选</li>
+                        <li><code>hours</code> - 最近N小时的日志</li>
+                    </ul>
+                    
+                    <button class="btn btn-primary btn-sm" onclick="testGetLogs()">
+                        <i class="bi bi-play"></i> 测试此API
+                    </button>
+                </div>
+            </div>
+            
+            <h4>检查子域名日志</h4>
+            <div class="card mb-3">
+                <div class="card-header">
+                    <code>GET /api/logs/check/{subdomain}</code>
+                </div>
+                <div class="card-body">
+                    <p>检查特定子域名是否有DNS查询记录，常用于SSRF漏洞验证。</p>
+                    
+                    <h6>路径参数：</h6>
+                    <ul>
+                        <li><code>subdomain</code> - 要检查的子域名</li>
+                    </ul>
+                    
+                    <h6>响应：</h6>
+                    <pre><code>{
+  "success": true,
+  "subdomain": "test123",
+  "domain": "cyj520.icu",
+  "full_domain": "test123.cyj520.icu",
+  "has_logs": true,
+  "count": 2,
+  "logs": [...]
+}</code></pre>
+                    
+                    <div class="mt-3">
+                        <label for="test-subdomain" class="form-label">测试子域名：</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="test-subdomain" placeholder="输入子域名">
+                            <button class="btn btn-primary" onclick="testCheckSubdomain()">
+                                <i class="bi bi-play"></i> 测试检查
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <h4>获取会话日志</h4>
+            <div class="card mb-3">
+                <div class="card-header">
+                    <code>GET /api/logs/{session_id}</code>
+                </div>
+                <div class="card-body">
+                    <p>获取指定会话的所有DNS日志记录。</p>
+                    
+                    <h6>路径参数：</h6>
+                    <ul>
+                        <li><code>session_id</code> - 会话ID</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+        
+        <!-- 统计信息 -->
+        <section id="stats" class="mb-5">
+            <h2>统计信息</h2>
+            
+            <div class="card">
+                <div class="card-header">
+                    <code>GET /api/stats</code>
+                </div>
+                <div class="card-body">
+                    <p>获取平台统计信息。</p>
+                    
+                    <h6>响应：</h6>
+                    <pre><code>{
+  "success": true,
+  "stats": {
+    "total_logs": 1234,
+    "today_logs": 56,
+    "recent_logs_24h": 78,
+    "active_sessions": 5,
+    "unique_ips_24h": 12,
+    "domain": "cyj520.icu"
+  }
+}</code></pre>
+                    
+                    <button class="btn btn-primary btn-sm" onclick="testGetStats()">
+                        <i class="bi bi-play"></i> 测试此API
+                    </button>
+                </div>
+            </div>
+        </section>
+        
+        <!-- 使用示例 -->
+        <section id="examples" class="mb-5">
+            <h2>使用示例</h2>
+            
+            <h4>Python示例</h4>
+            <pre><code>import requests
+import time
+
+# 1. 创建测试会话
+session_data = {
+    "name": "SSRF漏洞检测",
+    "description": "目标：example.com"
+}
+response = requests.post("http://localhost:5000/api/session", json=session_data)
+session = response.json()["session"]
+session_id = session["id"]
+
+# 2. 生成测试子域名
+subdomain_data = {
+    "type": "ssrf",
+    "session_id": session_id
+}
+response = requests.post("http://localhost:5000/api/subdomain/generate", json=subdomain_data)
+result = response.json()
+test_domain = result["full_domain"]
+
+# 3. 在SSRF测试中使用该域名
+print(f"请在SSRF测试中访问: {test_domain}")
+
+# 4. 等待一段时间后检查是否有DNS查询
+time.sleep(10)
+response = requests.get(f"http://localhost:5000/api/logs/check/{result['subdomain']}")
+check_result = response.json()
+
+if check_result["has_logs"]:
+    print("检测到DNS查询！可能存在SSRF漏洞")
+    for log in check_result["logs"]:
+        print(f"查询时间: {log['timestamp']}")
+        print(f"来源IP: {log['client_ip']}")
+else:
+    print("未检测到DNS查询")</code></pre>
+            
+            <h4>curl示例</h4>
+            <pre><code># 创建会话
+curl -X POST http://localhost:5000/api/session \
+  -H "Content-Type: application/json" \
+  -d '{"name":"SSRF测试","description":"测试描述"}'
+
+# 生成子域名
+curl -X POST http://localhost:5000/api/subdomain/generate \
+  -H "Content-Type: application/json" \
+  -d '{"type":"ssrf","session_id":"your-session-id"}'
+
+# 检查子域名日志
+curl http://localhost:5000/api/logs/check/your-subdomain
+
+# 获取统计信息
+curl http://localhost:5000/api/stats</code></pre>
+        </section>
+        
+        <!-- API测试结果 -->
+        <div id="api-test-result" class="alert" style="display: none;">
+            <h6>测试结果：</h6>
+            <pre id="api-test-content"></pre>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 设置基础URL
+document.addEventListener('DOMContentLoaded', function() {
+    const baseUrl = `${window.location.protocol}//${window.location.host}/api`;
+    document.getElementById('base-url').textContent = baseUrl;
+});
+
+// 显示测试结果
+function showTestResult(data, success = true) {
+    const resultDiv = document.getElementById('api-test-result');
+    const contentPre = document.getElementById('api-test-content');
+    
+    resultDiv.className = success ? 'alert alert-success' : 'alert alert-danger';
+    contentPre.textContent = JSON.stringify(data, null, 2);
+    resultDiv.style.display = 'block';
+    
+    // 滚动到结果区域
+    resultDiv.scrollIntoView({ behavior: 'smooth' });
+}
+
+// 测试创建会话
+function testCreateSession() {
+    const sessionData = {
+        name: "API测试会话",
+        description: "通过API文档页面创建的测试会话"
+    };
+    
+    fetch('/api/session', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(sessionData)
+    })
+    .then(response => response.json())
+    .then(data => showTestResult(data, data.success))
+    .catch(error => showTestResult({error: error.message}, false));
+}
+
+// 测试生成子域名
+function testGenerateSubdomain() {
+    const subdomainData = {
+        type: "test",
+        length: 12
+    };
+    
+    fetch('/api/subdomain/generate', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(subdomainData)
+    })
+    .then(response => response.json())
+    .then(data => showTestResult(data, data.success))
+    .catch(error => showTestResult({error: error.message}, false));
+}
+
+// 测试获取日志
+function testGetLogs() {
+    fetch('/api/logs?per_page=5&hours=24')
+        .then(response => response.json())
+        .then(data => showTestResult(data, data.success))
+        .catch(error => showTestResult({error: error.message}, false));
+}
+
+// 测试检查子域名
+function testCheckSubdomain() {
+    const subdomain = document.getElementById('test-subdomain').value.trim();
+    if (!subdomain) {
+        showToast('请输入要检查的子域名', 'warning');
+        return;
+    }
+    
+    fetch(`/api/logs/check/${subdomain}`)
+        .then(response => response.json())
+        .then(data => showTestResult(data, data.success))
+        .catch(error => showTestResult({error: error.message}, false));
+}
+
+// 测试获取统计信息
+function testGetStats() {
+    fetch('/api/stats')
+        .then(response => response.json())
+        .then(data => showTestResult(data, data.success))
+        .catch(error => showTestResult({error: error.message}, false));
+}
+
+// 平滑滚动到指定section
+document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+    anchor.addEventListener('click', function (e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+            target.scrollIntoView({ behavior: 'smooth' });
+        }
+    });
+});
+</script>
+{% endblock %}

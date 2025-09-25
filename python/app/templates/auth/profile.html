@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+
+{% block title %}用户资料 - DNSLog Platform{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">
+                    <i class="bi bi-person-circle"></i>
+                    用户资料
+                </h4>
+            </div>
+            <div class="card-body">
+                <!-- 用户信息 -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="card-title">基本信息</h6>
+                                <p><strong>用户名：</strong> {{ user.username }}</p>
+                                <p><strong>角色：</strong> 
+                                    {% if user.is_admin %}
+                                        <span class="badge bg-primary">管理员</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">普通用户</span>
+                                    {% endif %}
+                                </p>
+                                <p><strong>账户状态：</strong> 
+                                    {% if user.is_active %}
+                                        <span class="badge bg-success">激活</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">停用</span>
+                                    {% endif %}
+                                </p>
+                                <p><strong>注册时间：</strong> {{ user.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+                                <p><strong>最后登录：</strong> 
+                                    {% if user.last_login %}
+                                        {{ user.last_login.strftime('%Y-%m-%d %H:%M:%S') }}
+                                    {% else %}
+                                        从未登录
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="card-title">安全设置</h6>
+                                <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#changePasswordModal">
+                                    <i class="bi bi-key"></i> 修改密码
+                                </button>
+                                <hr>
+                                <p class="text-muted mb-0">
+                                    <i class="bi bi-info-circle"></i>
+                                    为了账户安全，建议定期更换密码
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 修改密码模态框 -->
+<div class="modal fade" id="changePasswordModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-key"></i>
+                    修改密码
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="changePasswordForm">
+                    <div class="mb-3">
+                        <label for="currentPassword" class="form-label">当前密码</label>
+                        <input type="password" class="form-control" id="currentPassword" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="newPassword" class="form-label">新密码</label>
+                        <input type="password" class="form-control" id="newPassword" required minlength="6">
+                        <div class="form-text">密码至少需要6位字符</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="confirmPassword" class="form-label">确认新密码</label>
+                        <input type="password" class="form-control" id="confirmPassword" required minlength="6">
+                    </div>
+                    <div class="mb-3">
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>密码要求：</strong>
+                            <ul class="mb-0 mt-2">
+                                <li>至少6位字符</li>
+                                <li>建议包含大小写字母、数字和特殊字符</li>
+                            </ul>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="changePassword()">
+                    <i class="bi bi-check"></i> 修改密码
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function changePassword() {
+    const currentPassword = document.getElementById('currentPassword').value;
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+    
+    // 验证输入
+    if (!currentPassword || !newPassword || !confirmPassword) {
+        showToast('请填写所有字段', 'error');
+        return;
+    }
+    
+    if (newPassword.length < 6) {
+        showToast('新密码至少需要6位字符', 'error');
+        return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+        showToast('两次输入的密码不一致', 'error');
+        return;
+    }
+    
+    // 发送请求
+    fetch('/auth/change-password', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            current_password: currentPassword,
+            new_password: newPassword,
+            confirm_password: confirmPassword
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('密码修改成功', 'success');
+            
+            // 清空表单
+            document.getElementById('changePasswordForm').reset();
+            
+            // 关闭模态框
+            const modal = bootstrap.Modal.getInstance(document.getElementById('changePasswordModal'));
+            modal.hide();
+        } else {
+            showToast(data.message || '修改密码失败', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('修改密码失败:', error);
+        showToast('网络错误，请重试', 'error');
+    });
+}
+
+// 表单回车提交
+document.getElementById('changePasswordForm').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        changePassword();
+    }
+});
+</script>
+{% endblock %}

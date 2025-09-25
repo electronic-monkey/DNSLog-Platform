@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual env
+.venv/
+venv/
+
+# Runtime artifacts
+logs/
+run/
+instance/
+*.pid
+.env
+.env.*
+
+# Database
+*.db
+
+# Editor
+.vscode/
+.idea/
+.cursor/
+.cursor-server/
+
+# OS
+.DS_Store
+Thumbs.db

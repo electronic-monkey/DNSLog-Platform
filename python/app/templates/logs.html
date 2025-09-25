@@ -1,0 +1,524 @@
+{% extends "base.html" %}
+
+{% block title %}DNS日志 - DNSLog Platform{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>
+        <i class="bi bi-list-ul"></i>
+        DNS查询日志
+    </h2>
+    <div class="btn-group">
+        <button type="button" class="btn btn-outline-primary" onclick="refreshLogs()">
+            <i class="bi bi-arrow-clockwise"></i> 刷新
+        </button>
+        <button type="button" class="btn btn-outline-danger" onclick="clearLogs()">
+            <i class="bi bi-trash"></i> 清空日志
+        </button>
+        <button type="button" class="btn btn-outline-success" onclick="exportLogs()">
+            <i class="bi bi-download"></i> 导出CSV
+        </button>
+    </div>
+</div>
+
+<!-- 筛选器 -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h6 class="mb-0">
+            <i class="bi bi-funnel"></i>
+            筛选器
+        </h6>
+    </div>
+    <div class="card-body">
+        <form id="filter-form" class="row g-3">
+            <div class="col-md-3">
+                <label for="filter-subdomain" class="form-label">子域名</label>
+                <input type="text" class="form-control" id="filter-subdomain" placeholder="搜索子域名">
+            </div>
+            <div class="col-md-3">
+                <label for="filter-ip" class="form-label">客户端IP</label>
+                <input type="text" class="form-control" id="filter-ip" placeholder="搜索IP地址">
+            </div>
+            <div class="col-md-3">
+                <label for="filter-session" class="form-label">会话ID</label>
+                <input type="text" class="form-control" id="filter-session" placeholder="搜索会话ID">
+            </div>
+            <div class="col-md-3">
+                <label for="filter-hours" class="form-label">时间范围</label>
+                <select class="form-select" id="filter-hours">
+                    <option value="">全部时间</option>
+                    <option value="1">最近1小时</option>
+                    <option value="6">最近6小时</option>
+                    <option value="24" selected>最近24小时</option>
+                    <option value="72">最近3天</option>
+                    <option value="168">最近7天</option>
+                </select>
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-search"></i> 搜索
+                </button>
+                <button type="button" class="btn btn-outline-secondary ms-2" onclick="clearFilters()">
+                    <i class="bi bi-x-circle"></i> 清空筛选
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 日志统计 -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h4 id="total-count">-</h4>
+                <p class="text-muted mb-0">总记录数</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h4 id="unique-domains">-</h4>
+                <p class="text-muted mb-0">唯一子域名</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h4 id="unique-ips">-</h4>
+                <p class="text-muted mb-0">唯一IP地址</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h4 id="current-page">-</h4>
+                <p class="text-muted mb-0">当前页</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 日志列表 -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">日志记录</h6>
+        <div class="d-flex align-items-center">
+            <label for="per-page" class="form-label me-2 mb-0">每页显示:</label>
+            <select class="form-select form-select-sm" id="per-page" style="width: auto;" onchange="changePerPage()">
+                <option value="25">25</option>
+                <option value="50" selected>50</option>
+                <option value="100">100</option>
+                <option value="200">200</option>
+            </select>
+            <div class="form-check form-switch ms-3">
+                <input class="form-check-input" type="checkbox" id="auto-refresh-toggle" onchange="toggleAutoRefresh()">
+                <label class="form-check-label" for="auto-refresh-toggle">自动刷新</label>
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        <div id="logs-container">
+            <div class="loading">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">加载中...</span>
+                </div>
+                <p class="mt-2">正在加载日志...</p>
+            </div>
+        </div>
+        
+        <!-- 分页 -->
+        <nav id="pagination-nav" style="display: none;">
+            <ul class="pagination justify-content-center" id="pagination">
+            </ul>
+        </nav>
+    </div>
+</div>
+
+<!-- 日志详情模态框 -->
+<div class="modal fade" id="logDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">日志详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="log-detail-content">
+                <!-- 详情内容将在这里显示 -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentPage = 1;
+let currentPerPage = 50;
+let currentFilters = {};
+let totalPages = 1;
+let autoRefreshTimer = null;
+
+// 页面加载时初始化
+document.addEventListener('DOMContentLoaded', function() {
+    // 设置默认筛选器
+    document.getElementById('filter-hours').value = '24';
+    
+    // 加载日志
+    loadLogs();
+    
+    // 设置表单提交事件
+    document.getElementById('filter-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        applyFilters();
+    });
+});
+
+function toggleAutoRefresh() {
+    const enabled = document.getElementById('auto-refresh-toggle').checked;
+    if (enabled) {
+        if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+        autoRefreshTimer = setInterval(() => refreshLogs(), 5000);
+        showToast('自动刷新已开启', 'success');
+    } else {
+        if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+        autoRefreshTimer = null;
+        showToast('自动刷新已关闭', 'info');
+    }
+}
+
+// 加载日志
+function loadLogs(page = 1) {
+    currentPage = page;
+    
+    // 构建查询参数
+    const params = new URLSearchParams({
+        page: page,
+        per_page: currentPerPage,
+        ...currentFilters
+    });
+    
+    fetch(`/api/logs?${params}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayLogs(data.logs);
+                updatePagination(data.pagination);
+                updateStats(data);
+            } else {
+                showToast('加载日志失败: ' + data.message, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('加载日志失败:', error);
+            showToast('加载日志失败', 'error');
+        });
+}
+
+// 显示日志
+function displayLogs(logs) {
+    const container = document.getElementById('logs-container');
+    
+    if (logs.length === 0) {
+        container.innerHTML = `
+            <div class="text-center text-muted py-5">
+                <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                <h5 class="mt-3">暂无日志记录</h5>
+                <p>当前筛选条件下没有找到任何DNS查询记录</p>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = `
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>时间</th>
+                        <th>完整域名</th>
+                        <th>客户端IP</th>
+                        <th>查询类型</th>
+                        <th>会话ID</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    logs.forEach(log => {
+        const sessionBadge = log.session_id ? 
+            `<span class="badge bg-info">${log.session_id.substring(0, 8)}...</span>` : 
+            '<span class="text-muted">-</span>';
+            
+        html += `
+            <tr data-session-id="${log.session_id ? log.session_id : ''}">
+                <td>
+                    <span class="timestamp">${formatTimestamp(log.timestamp)}</span>
+                </td>
+                <td>
+                    <code class="subdomain">${log.full_domain}</code>
+                    <button class="btn btn-link btn-sm copy-btn ms-1" onclick="copyToClipboard('${log.full_domain}')" 
+                            data-bs-toggle="tooltip" title="复制域名">
+                        <i class="bi bi-clipboard"></i>
+                    </button>
+                </td>
+                <td>
+                    <code class="ip-address">${log.client_ip}</code>
+                </td>
+                <td>
+                    <span class="badge bg-secondary">${log.query_type}</span>
+                </td>
+                <td>${sessionBadge}</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary" onclick="showLogDetail(${log.id})">
+                        <i class="bi bi-eye"></i> 详情
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += `
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+    
+    // 重新初始化tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+}
+
+// 更新分页
+function updatePagination(pagination) {
+    totalPages = pagination.pages;
+    currentPage = pagination.page;
+    
+    const nav = document.getElementById('pagination-nav');
+    const paginationUl = document.getElementById('pagination');
+    
+    if (totalPages <= 1) {
+        nav.style.display = 'none';
+        return;
+    }
+    
+    nav.style.display = 'block';
+    
+    let html = '';
+    
+    // 上一页
+    if (currentPage > 1) {
+        html += `<li class="page-item">
+            <a class="page-link" href="#" onclick="loadLogs(${currentPage - 1})">上一页</a>
+        </li>`;
+    }
+    
+    // 页码
+    const startPage = Math.max(1, currentPage - 2);
+    const endPage = Math.min(totalPages, currentPage + 2);
+    
+    if (startPage > 1) {
+        html += `<li class="page-item">
+            <a class="page-link" href="#" onclick="loadLogs(1)">1</a>
+        </li>`;
+        if (startPage > 2) {
+            html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+        const active = i === currentPage ? 'active' : '';
+        html += `<li class="page-item ${active}">
+            <a class="page-link" href="#" onclick="loadLogs(${i})">${i}</a>
+        </li>`;
+    }
+    
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+        html += `<li class="page-item">
+            <a class="page-link" href="#" onclick="loadLogs(${totalPages})">${totalPages}</a>
+        </li>`;
+    }
+    
+    // 下一页
+    if (currentPage < totalPages) {
+        html += `<li class="page-item">
+            <a class="page-link" href="#" onclick="loadLogs(${currentPage + 1})">下一页</a>
+        </li>`;
+    }
+    
+    paginationUl.innerHTML = html;
+}
+
+// 更新统计信息
+function updateStats(data) {
+    document.getElementById('total-count').textContent = data.pagination.total;
+    document.getElementById('current-page').textContent = `${currentPage}/${totalPages}`;
+    
+    // 计算唯一域名和IP数量
+    const uniqueDomains = new Set(data.logs.map(log => log.full_domain)).size;
+    const uniqueIps = new Set(data.logs.map(log => log.client_ip)).size;
+    
+    document.getElementById('unique-domains').textContent = uniqueDomains;
+    document.getElementById('unique-ips').textContent = uniqueIps;
+}
+
+// 应用筛选器
+function applyFilters() {
+    currentFilters = {};
+    
+    const subdomain = document.getElementById('filter-subdomain').value.trim();
+    const ip = document.getElementById('filter-ip').value.trim();
+    const session = document.getElementById('filter-session').value.trim();
+    const hours = document.getElementById('filter-hours').value;
+    
+    if (subdomain) currentFilters.subdomain = subdomain;
+    if (ip) currentFilters.client_ip = ip;
+    if (session) currentFilters.session_id = session;
+    if (hours) currentFilters.hours = hours;
+    
+    loadLogs(1);
+}
+
+// 清空筛选器
+function clearFilters() {
+    document.getElementById('filter-subdomain').value = '';
+    document.getElementById('filter-ip').value = '';
+    document.getElementById('filter-session').value = '';
+    document.getElementById('filter-hours').value = '24';
+    
+    currentFilters = {};
+    loadLogs(1);
+}
+
+// 改变每页显示数量
+function changePerPage() {
+    currentPerPage = parseInt(document.getElementById('per-page').value);
+    loadLogs(1);
+}
+
+// 刷新日志
+function refreshLogs() {
+    loadLogs(currentPage);
+    showToast('日志已刷新', 'success');
+}
+
+// 清空日志
+function clearLogs() {
+    if (!confirm('确定要清空所有日志吗？此操作不可恢复！')) {
+        return;
+    }
+    
+    fetch('/api/logs/clear', {
+        method: 'DELETE'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast(data.message, 'success');
+            loadLogs(1);
+        } else {
+            showToast('清空失败: ' + data.message, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('清空失败:', error);
+        showToast('清空失败', 'error');
+    });
+}
+
+// 导出日志
+function exportLogs() {
+    const params = new URLSearchParams({
+        ...currentFilters
+    });
+    const url = '/api/logs/export' + (params.toString() ? ('?' + params.toString()) : '');
+    window.open(url, '_blank');
+}
+
+// 显示日志详情
+function showLogDetail(logId) {
+    // 简化：从当前DOM中提取该行信息并渲染详情
+    try {
+        const rows = document.querySelectorAll('#logs-container table tbody tr');
+        let detail = null;
+        rows.forEach((tr) => {
+            const copyBtn = tr.querySelector('button.copy-btn');
+            const fullDomain = tr.querySelector('code.subdomain')?.textContent || '';
+            const ip = tr.querySelector('code.ip-address')?.textContent || '';
+            const time = tr.querySelector('.timestamp')?.textContent || '';
+            const type = tr.querySelector('.badge.bg-secondary')?.textContent || '';
+            const sessionIdFull = tr.dataset.sessionId || '';
+            // 只能通过比对域名和时间做退化匹配
+            if (!detail && fullDomain && time && copyBtn && tr.querySelector(`button[onclick="showLogDetail(${logId})"]`)) {
+                detail = {fullDomain, ip, time, type, sessionId: sessionIdFull};
+            }
+        });
+        if (!detail) {
+            showToast('未找到日志详情', 'warning');
+            return;
+        }
+        const html = `
+            <div class="mb-3">
+                <label class="form-label">完整域名</label>
+                <div class="input-group">
+                    <input class="form-control" value="${detail.fullDomain}" readonly>
+                    <button class="btn btn-outline-secondary" onclick="copyToClipboard('${detail.fullDomain}')"><i class="bi bi-clipboard"></i></button>
+                </div>
+            </div>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">客户端IP</label>
+                    <div class="input-group">
+                        <input class="form-control" value="${detail.ip}" readonly>
+                        <button class="btn btn-outline-secondary" onclick="copyToClipboard('${detail.ip}')"><i class="bi bi-clipboard"></i></button>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">查询类型</label>
+                    <input class="form-control" value="${detail.type}" readonly>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">时间</label>
+                    <input class="form-control" value="${detail.time}" readonly>
+                </div>
+            </div>
+            <div class="mt-3">
+                <label class="form-label">会话ID</label>
+                <div class="input-group">
+                    <input class="form-control" value="${detail.sessionId || '-'}" readonly>
+                    ${detail.sessionId ? `<button class="btn btn-outline-secondary" onclick="copyToClipboard('${detail.sessionId}')"><i class="bi bi-clipboard"></i></button>` : ''}
+                </div>
+            </div>
+            <div class="mt-3">
+                <label class="form-label">工具命令</label>
+                <div class="d-flex gap-2 flex-wrap">
+                    <button class="btn btn-sm btn-outline-primary" onclick="copyToClipboard(window.buildDigCommand ? window.buildDigCommand('${detail.fullDomain}') : 'dig ${detail.fullDomain}.')">
+                        <i class="bi bi-terminal"></i> 复制 dig
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="copyToClipboard('${detail.fullDomain}')">
+                        <i class="bi bi-clipboard"></i> 复制域名
+                    </button>
+                </div>
+            </div>
+        `;
+        document.getElementById('log-detail-content').innerHTML = html;
+        const modal = new bootstrap.Modal(document.getElementById('logDetailModal'));
+        modal.show();
+    } catch (e) {
+        console.error(e);
+        showToast('加载详情失败', 'error');
+    }
+}
+</script>
+{% endblock %}

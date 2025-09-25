@@ -1,0 +1,384 @@
+{% extends "base.html" %}
+
+{% block title %}DNSLog Platform - 首页{% endblock %}
+
+{% block content %}
+<!-- 域名信息卡片 -->
+<div class="domain-info">
+    <div class="row align-items-center">
+        <div class="col-md-8">
+            <h3 class="mb-2">
+                <i class="bi bi-shield-check"></i>
+                DNSLog Platform
+            </h3>
+            <p class="mb-0">专业的DNS日志记录平台，用于SSRF漏洞检测和安全测试</p>
+        </div>
+        <div class="col-md-4 text-md-end">
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-light" onclick="refreshStats()">
+                    <i class="bi bi-arrow-clockwise"></i> 刷新
+                </button>
+                <button type="button" class="btn btn-light" onclick="copyDomain()">
+                    <i class="bi bi-clipboard"></i> 复制域名
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 统计信息 -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="card stats-card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-list-ul text-primary" style="font-size: 2rem;"></i>
+                <h4 class="mt-2 mb-1" id="total-logs">-</h4>
+                <p class="text-muted mb-0">总日志数</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card stats-card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-calendar-day text-success" style="font-size: 2rem;"></i>
+                <h4 class="mt-2 mb-1" id="today-logs">-</h4>
+                <p class="text-muted mb-0">今日日志</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card stats-card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-clock text-warning" style="font-size: 2rem;"></i>
+                <h4 class="mt-2 mb-1" id="recent-logs">-</h4>
+                <p class="text-muted mb-0">24小时内</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card stats-card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-people text-info" style="font-size: 2rem;"></i>
+                <h4 class="mt-2 mb-1" id="unique-ips">-</h4>
+                <p class="text-muted mb-0">唯一IP</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 功能区域 -->
+<div class="row">
+    <!-- 快速生成子域名 -->
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-plus-circle"></i>
+                    快速生成子域名
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="generate-form">
+                    <div class="mb-3">
+                        <label for="session-id" class="form-label">会话ID（可选）</label>
+                        <input type="text" class="form-control" id="session-id" placeholder="留空自动生成">
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-arrow-right"></i> 生成子域名
+                    </button>
+                </form>
+                
+                <div id="generated-result" class="mt-3" style="display: none;">
+                    <div class="alert alert-success">
+                        <h6>生成的子域名：</h6>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="generated-domain" readonly>
+                            <button class="btn btn-outline-secondary" type="button" onclick="copyGenerated()">
+                                <i class="bi bi-clipboard"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 检查子域名 -->
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-search"></i>
+                    检查子域名日志
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="check-form">
+                    <div class="mb-3">
+                        <label for="check-subdomain" class="form-label">子域名</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="check-subdomain" 
+                                   placeholder="输入子域名（不含主域名）">
+                            <span class="input-group-text" id="domain-suffix">.</span>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-success w-100">
+                        <i class="bi bi-search"></i> 检查日志
+                    </button>
+                </form>
+                
+                <div id="check-result" class="mt-3" style="display: none;">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 最近日志 -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">
+            <i class="bi bi-clock-history"></i>
+            最近DNS日志
+        </h5>
+        <button class="btn btn-sm btn-outline-primary" onclick="refreshLogs()">
+            <i class="bi bi-arrow-clockwise"></i> 刷新
+        </button>
+    </div>
+    <div class="card-body">
+        <div id="recent-logs-container">
+            <div class="loading">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">加载中...</span>
+                </div>
+                <p class="mt-2">正在加载最近日志...</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentDomain = '';
+
+// 页面加载时初始化
+document.addEventListener('DOMContentLoaded', function() {
+    refreshStats();
+    refreshLogs();
+    
+    // 设置表单提交事件
+    document.getElementById('generate-form').addEventListener('submit', handleGenerate);
+    document.getElementById('check-form').addEventListener('submit', handleCheck);
+});
+
+// 刷新统计信息
+function refreshStats() {
+    fetch('/api/stats')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const stats = data.stats;
+                document.getElementById('total-logs').textContent = stats.total_logs;
+                document.getElementById('today-logs').textContent = stats.today_logs;
+                document.getElementById('recent-logs').textContent = stats.recent_logs_24h;
+                document.getElementById('unique-ips').textContent = stats.unique_ips_24h;
+                currentDomain = stats.domain;
+                document.getElementById('domain-suffix').textContent = '.' + stats.domain;
+            }
+        })
+        .catch(error => {
+            console.error('获取统计信息失败:', error);
+            showToast('获取统计信息失败', 'error');
+        });
+}
+
+// 刷新最近日志
+function refreshLogs() {
+    fetch('/api/logs?per_page=100&hours=24')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayLogsGrouped(data.logs);
+            } else {
+                showToast('获取日志失败: ' + data.message, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('获取日志失败:', error);
+            showToast('获取日志失败', 'error');
+        });
+}
+
+// 显示日志
+function displayLogsGrouped(logs) {
+    const container = document.getElementById('recent-logs-container');
+    if (logs.length === 0) {
+        container.innerHTML = `
+            <div class="text-center text-muted">
+                <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+                <p class="mt-2">暂无最近日志</p>
+            </div>`;
+        return;
+    }
+    // 按规范化域名分组
+    const groups = {};
+    logs.forEach(l => {
+        const key = l.full_domain_normalized || (l.full_domain || '').toLowerCase();
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(l);
+    });
+    const keys = Object.keys(groups).slice(0, 10); // 显示前10组
+    let html = '';
+    keys.forEach(k => {
+        const items = groups[k];
+        const latest = items[0];
+        const count = items.length;
+        const digCmd = window.buildDigCommand ? window.buildDigCommand(k) : `dig ${k}.`;
+        html += `
+        <div class="log-entry p-3 rounded">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="subdomain">${k}</div>
+                    <small class="text-muted">最近 ${formatTimestamp(latest.timestamp)} · ${count} 条</small>
+                </div>
+                <div>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="copyToClipboard('${k}')"><i class="bi bi-clipboard"></i> 复制域名</button>
+                    <button class="btn btn-sm btn-outline-primary ms-2" onclick="copyToClipboard('${digCmd}')"><i class="bi bi-terminal"></i> 复制 dig</button>
+                </div>
+            </div>
+        </div>`;
+    });
+    container.innerHTML = html;
+}
+
+// 处理生成子域名
+function handleGenerate(event) {
+    event.preventDefault();
+    
+    const sessionId = document.getElementById('session-id').value;
+    
+    const data = {
+        // 不再传递payload类型
+    };
+    
+    if (sessionId) {
+        data.session_id = sessionId;
+    }
+    
+    fetch('/api/subdomain/generate', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('generated-domain').value = data.full_domain;
+            document.getElementById('generated-result').style.display = 'block';
+            showToast('子域名生成成功', 'success');
+        } else {
+            showToast('生成失败: ' + data.message, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('生成失败:', error);
+        showToast('生成失败', 'error');
+    });
+}
+
+// 处理检查子域名
+function handleCheck(event) {
+    event.preventDefault();
+    
+    const subdomain = document.getElementById('check-subdomain').value.trim();
+    if (!subdomain) {
+        showToast('请输入子域名', 'warning');
+        return;
+    }
+    
+    fetch(`/api/logs/check/${subdomain}`)
+        .then(response => response.json())
+        .then(data => {
+            displayCheckResult(data);
+        })
+        .catch(error => {
+            console.error('检查失败:', error);
+            showToast('检查失败', 'error');
+        });
+}
+
+// 显示检查结果
+function displayCheckResult(data) {
+    const container = document.getElementById('check-result');
+    
+    if (!data.success) {
+        container.innerHTML = `
+            <div class="alert alert-danger">
+                检查失败: ${data.message}
+            </div>
+        `;
+        container.style.display = 'block';
+        return;
+    }
+    
+    let html = '';
+    
+    if (data.has_logs) {
+        html = `
+            <div class="alert alert-success">
+                <h6><i class="bi bi-check-circle"></i> 发现 ${data.count} 条DNS查询记录</h6>
+                <small>域名: ${data.full_domain}</small>
+            </div>
+        `;
+        
+        data.logs.forEach(log => {
+            html += `
+                <div class="log-entry p-2 rounded mb-2">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <strong>IP:</strong> <span class="ip-address">${log.client_ip}</span>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>类型:</strong> <span class="badge bg-secondary">${log.query_type}</span>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="timestamp">${formatTimestamp(log.timestamp)}</small>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+    } else {
+        html = `
+            <div class="alert alert-info">
+                <h6><i class="bi bi-info-circle"></i> 暂无DNS查询记录</h6>
+                <small>域名: ${data.full_domain}</small>
+            </div>
+        `;
+    }
+    
+    container.innerHTML = html;
+    container.style.display = 'block';
+}
+
+// 复制域名
+function copyDomain() {
+    if (currentDomain) {
+        copyToClipboard(currentDomain);
+    } else {
+        showToast('域名信息还未加载', 'warning');
+    }
+}
+
+// 复制生成的域名
+function copyGenerated() {
+    const domain = document.getElementById('generated-domain').value;
+    if (domain) {
+        copyToClipboard(domain);
+    }
+}
+</script>
+{% endblock %}
