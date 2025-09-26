@@ -79,6 +79,21 @@ class Session(db.Model):
             'dns_logs_count': len(self.dns_logs)
         }
 
+    @staticmethod
+    def touch(session_id: str):
+        """更新会话的最后活跃时间（若存在）。"""
+        try:
+            s = Session.query.get(session_id)
+            if s:
+                s.last_activity = datetime.utcnow()
+                db.session.add(s)
+                db.session.commit()
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+
 class SubdomainGenerator:
     """子域名生成器"""
     

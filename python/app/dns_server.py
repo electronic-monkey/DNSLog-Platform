@@ -141,6 +141,15 @@ class DNSLogResolver(BaseResolver):
                 
                 db.session.add(dns_log)
                 db.session.commit()
+                # 更新会话活跃时间
+                if session_id:
+                    try:
+                        Session.touch(session_id)
+                    except Exception:
+                        try:
+                            db.session.rollback()
+                        except Exception:
+                            pass
                 
                 logger.info(f"DNS查询已记录: {subdomain}.{self.domain}")
                 

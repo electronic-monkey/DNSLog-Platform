@@ -553,8 +553,8 @@ def update_settings():
             return jsonify({'success': False, 'message': '；'.join(errors)}), 400
         allowed = ['DOMAIN','NS1_DOMAIN','NS2_DOMAIN','NS_IP','A_RECORD_IP','DNS_SERVER_HOST','DNS_SERVER_PORT','WEB_SERVER_HOST','WEB_SERVER_PORT','SQLALCHEMY_DATABASE_URI','LOG_RETENTION_DAYS']
         data = {k: payload.get(k) for k in allowed if k in payload}
-        instance_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', 'instance')
-        instance_dir = os.path.abspath(instance_dir)
+        # 保存到 Flask 的 instance 目录，确保与加载时一致
+        instance_dir = current_app.instance_path
         os.makedirs(instance_dir, exist_ok=True)
         cfg_file = os.path.join(instance_dir, 'config.json')
         existing = {}
@@ -567,7 +567,51 @@ def update_settings():
         existing.update(data)
         with open(cfg_file, 'w', encoding='utf-8') as f:
             json.dump(existing, f, ensure_ascii=False, indent=2)
-        return jsonify({'success': True, 'message': '保存成功，需要重启生效'})
+
+        # 应用到运行时配置（内存）
+        changed_keys = set(data.keys())
+        def _cast_value(k, v):
+            if k in ('DNS_SERVER_PORT','WEB_SERVER_PORT','LOG_RETENTION_DAYS'):
+                try:
+                    return int(v)
+                except Exception:
+                    return v
+            return v
+        try:
+            for k, v in data.items():
+                val = _cast_value(k, v)
+                setattr(Config, k, val)
+                current_app.config[k] = getattr(Config, k)
+        except Exception:
+            pass
+
+        # 动态更新 DNS 解析器与服务器
+        try:
+            srv = getattr(current_app, 'dns_server', None)
+            if srv:
+                # 更新解析器关键字段
+                if changed_keys & {'DOMAIN','NS1_DOMAIN','NS2_DOMAIN','NS_IP','A_RECORD_IP'}:
+                    try:
+                        srv.resolver.domain = Config.DOMAIN
+                        srv.resolver.ns_ip = Config.NS_IP
+                        srv.resolver.a_record_ip = Config.A_RECORD_IP
+                    except Exception:
+                        pass
+                # 若监听地址/端口变化，则重启DNS服务
+                if changed_keys & {'DNS_SERVER_HOST','DNS_SERVER_PORT'}:
+                    try:
+                        srv.stop()
+                    except Exception:
+                        pass
+                    from app.dns_server import DNSLogServer
+                    new_srv = DNSLogServer(current_app)
+                    current_app.dns_server = new_srv
+                    new_srv.start_threaded()
+        except Exception:
+            pass
+
+        msg = '保存成功，已应用配置。若修改了 Web 监听，请重启 Web 服务生效'
+        return jsonify({'success': True, 'message': msg})
     except Exception as e:
         logger.error(f"保存设置失败: {e}")
         return jsonify({'success': False, 'message': '保存失败'}), 500

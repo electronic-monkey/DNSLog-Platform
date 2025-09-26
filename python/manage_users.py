@@ -164,15 +164,15 @@ def reset_admin():
         
         if admin_user:
             # 重置密码
-            admin_user.set_password('123456Test.')
+            admin_user.set_password('123456')
             admin_user.is_admin = True
             admin_user.is_active = True
             db.session.commit()
-            click.echo('成功重置管理员账户密码为: 123456Test.')
+            click.echo('成功重置管理员账户密码为: 123456')
         else:
             # 创建新的管理员账户
             admin_user = User.create_admin_user()
-            click.echo('成功创建默认管理员账户: admin / 123456Test.')
+            click.echo('成功创建默认管理员账户: admin / 123456')
 
 if __name__ == '__main__':
     cli()

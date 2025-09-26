@@ -7,8 +7,7 @@
   <h2><i class="bi bi-gear"></i> 系统设置</h2>
   <div>
     <button class="btn btn-outline-primary" onclick="loadSettings()"><i class="bi bi-arrow-clockwise"></i> 刷新</button>
-    <button class="btn btn-primary" onclick="saveSettings()"><i class="bi bi-save"></i> 保存</button>
-    <button class="btn btn-danger" onclick="restartConfirm()"><i class="bi bi-power"></i> 保存并重启</button>
+    <button class="btn btn-primary" onclick="saveSettings()"><i class="bi bi-save"></i> 保存并应用</button>
   </div>
   </div>
 
@@ -126,9 +125,8 @@ async function saveSettings(){
   const keys=['DOMAIN','NS1_DOMAIN','NS2_DOMAIN','NS_IP','A_RECORD_IP','DNS_SERVER_HOST','DNS_SERVER_PORT','WEB_SERVER_HOST','WEB_SERVER_PORT','SQLALCHEMY_DATABASE_URI','LOG_RETENTION_DAYS'];
   const payload={}; keys.forEach(k=>{ const el=document.getElementById(k); if(el){ const v=el.value; if(v!==''&&v!=null) payload[k]= (k.endsWith('_PORT')||k==='LOG_RETENTION_DAYS')? Number(v): v; }});
   const r = await fetch('/api/settings',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
-  const d = await r.json(); if(d.success){ showToast('保存成功，需要重启生效','success'); } else { showToast(d.message||'保存失败','error'); }
+  const d = await r.json(); if(d.success){ showToast(d.message||'保存并已应用','success'); loadSettings(); } else { showToast(d.message||'保存失败','error'); }
 }
-function restartConfirm(){ saveSettings().then(()=>{ alert('已保存。请执行: bash /root/SSRF/scripts/stop.sh && bash /root/SSRF/scripts/start.sh 以重启使配置生效'); }); }
 loadSettings();
 </script>
 {% endblock %}

@@ -52,13 +52,12 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     
-    # 打印横幅
-    print_banner()
-    
     try:
         # 创建Flask应用
         logger.info("正在初始化Flask应用...")
         app = create_app()
+        # 打印横幅（此时 Config 已可能被 instance 覆盖）
+        print_banner()
         
         # 启动DNS服务器（在后台线程）
         logger.info("正在启动DNS服务器...")
