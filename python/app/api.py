@@ -4,7 +4,7 @@ from flask_cors import cross_origin
 from flask import current_app
 from flask_login import login_required, current_user
 from datetime import datetime, timedelta
-from app.models import db, DNSLog, Session, SubdomainGenerator, APIToken
+from app.models import db, DNSLog, Session, SubdomainGenerator, APIToken, GeneratedSubdomain
 from app.config import Config
 import os, json
 import uuid
@@ -138,6 +138,23 @@ def generate_subdomain():
         
         full_domain = f"{subdomain}.{Config.DOMAIN}"
         
+        try:
+            # 记录到白名单
+            g = GeneratedSubdomain(
+                subdomain=subdomain,
+                domain=Config.DOMAIN,
+                full_domain=full_domain,
+                session_id=session_id,
+                payload_type=payload_type
+            )
+            db.session.add(g)
+            db.session.commit()
+        except Exception as e:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            # 不影响返回
         return jsonify({
             'success': True,
             'subdomain': subdomain,

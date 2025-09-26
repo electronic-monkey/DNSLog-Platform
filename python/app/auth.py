@@ -231,3 +231,131 @@ def delete_token(token_id: int):
     db.session.delete(token)
     db.session.commit()
     return jsonify({'success': True, 'message': '已删除'})
+
+@auth_bp.route('/api/tokens/<int:token_id>', methods=['PATCH'])
+@login_required
+def update_token(token_id: int):
+    """更新Token属性：name/scope/is_active/ttl_days（重置或延长过期时间）。"""
+    token = APIToken.query.filter_by(id=token_id, user_id=current_user.id).first()
+    if not token:
+        return jsonify({'success': False, 'message': 'Token不存在'}), 404
+    data = request.get_json() or {}
+    try:
+        name = data.get('name', None)
+        if name is not None:
+            token.name = name[:120]
+        scope = data.get('scope', None)
+        if scope is not None:
+            if scope in ('api','read','admin'):
+                token.scope = scope
+            else:
+                return jsonify({'success': False, 'message': '无效的scope'}), 400
+        if 'is_active' in data:
+            token.is_active = bool(data.get('is_active'))
+        if 'ttl_days' in data:
+            ttl_days = data.get('ttl_days')
+            if ttl_days in (None, '', 0, '0'):
+                token.expires_at = None
+            else:
+                try:
+                    ttl = int(ttl_days)
+                    if ttl > 0:
+                        token.expires_at = datetime.utcnow() + timedelta(days=ttl)
+                except Exception:
+                    return jsonify({'success': False, 'message': 'ttl_days 无效'}), 400
+        db.session.add(token)
+        db.session.commit()
+        return jsonify({'success': True, 'token': token.to_dict()})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': f'更新失败: {e}'}), 500
+
+# ==================== 用户管理（管理员） ====================
+
+@auth_bp.route('/users', methods=['GET'])
+@login_required
+def users_page():
+    if (not current_user.is_authenticated) or (not getattr(current_user, 'is_admin', False)):
+        return redirect(url_for('web.index'))
+    return render_template('auth/users.html')
+
+@auth_bp.route('/api/users', methods=['GET'])
+@login_required
+def list_users_api():
+    if (not current_user.is_authenticated) or (not getattr(current_user, 'is_admin', False)):
+        return jsonify({'success': False, 'message': '需要管理员权限'}), 403
+    users = User.query.order_by(User.id.asc()).all()
+    return jsonify({'success': True, 'users': [u.to_dict() for u in users]})
+
+@auth_bp.route('/api/users', methods=['POST'])
+@login_required
+def create_user_api():
+    if (not current_user.is_authenticated) or (not getattr(current_user, 'is_admin', False)):
+        return jsonify({'success': False, 'message': '需要管理员权限'}), 403
+    data = request.get_json() or {}
+    username = (data.get('username') or '').strip()
+    password = (data.get('password') or '').strip()
+    is_admin = bool(data.get('is_admin', False))
+    if not username or not password:
+        return jsonify({'success': False, 'message': '用户名与密码必填'}), 400
+    if User.query.filter_by(username=username).first():
+        return jsonify({'success': False, 'message': '用户名已存在'}), 409
+    try:
+        u = User(username=username, is_admin=is_admin, is_active=True)
+        u.set_password(password)
+        db.session.add(u)
+        db.session.commit()
+        return jsonify({'success': True, 'user': u.to_dict()})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': f'创建失败: {e}'}), 500
+
+@auth_bp.route('/api/users/<int:user_id>', methods=['PATCH'])
+@login_required
+def update_user_api(user_id: int):
+    if (not current_user.is_authenticated) or (not getattr(current_user, 'is_admin', False)):
+        return jsonify({'success': False, 'message': '需要管理员权限'}), 403
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'success': False, 'message': '用户不存在'}), 404
+    data = request.get_json() or {}
+    try:
+        if 'is_active' in data:
+            if user.id == current_user.id and not bool(data.get('is_active')):
+                return jsonify({'success': False, 'message': '不能停用自身账户'}), 400
+            user.is_active = bool(data.get('is_active'))
+        if 'is_admin' in data:
+            if user.id == current_user.id and not bool(data.get('is_admin')):
+                return jsonify({'success': False, 'message': '不能取消自身管理员权限'}), 400
+            user.is_admin = bool(data.get('is_admin'))
+        if 'password' in data and (data.get('password') or '').strip():
+            new_pw = (data.get('password') or '').strip()
+            # 简单强度校验：至少8位且含大小写与数字
+            import re
+            if (len(new_pw) < 8) or (not re.search(r'[A-Z]', new_pw)) or (not re.search(r'[a-z]', new_pw)) or (not re.search(r'\d', new_pw)):
+                return jsonify({'success': False, 'message': '新密码需至少8位且包含大小写字母与数字'}), 400
+            user.set_password(new_pw)
+        db.session.add(user)
+        db.session.commit()
+        return jsonify({'success': True, 'user': user.to_dict()})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': f'更新失败: {e}'}), 500
+
+@auth_bp.route('/api/users/<int:user_id>', methods=['DELETE'])
+@login_required
+def delete_user_api(user_id: int):
+    if (not current_user.is_authenticated) or (not getattr(current_user, 'is_admin', False)):
+        return jsonify({'success': False, 'message': '需要管理员权限'}), 403
+    if user_id == current_user.id:
+        return jsonify({'success': False, 'message': '不能删除自身账户'}), 400
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'success': False, 'message': '用户不存在'}), 404
+    try:
+        db.session.delete(user)
+        db.session.commit()
+        return jsonify({'success': True, 'message': '已删除'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': f'删除失败: {e}'}), 500

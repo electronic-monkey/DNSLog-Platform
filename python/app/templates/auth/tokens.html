@@ -22,14 +22,56 @@
 <div class="card">
   <div class="card-body">
     <div id="new-token-alert" class="alert alert-warning alert-dismissible fade show" role="alert" style="display:none;"></div>
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <div class="text-muted small">仅显示当前账户的 Token</div>
+      <div class="d-flex align-items-center gap-2">
+        <label class="form-label mb-0">筛选状态</label>
+        <select id="filter-status" class="form-select form-select-sm" style="width:auto;">
+          <option value="all">全部</option>
+          <option value="active" selected>启用</option>
+          <option value="inactive">停用</option>
+        </select>
+      </div>
+    </div>
     <div id="tokens-container"></div>
+  </div>
+  </div>
+
+<!-- 新建 Token 弹窗（仅显示一次原文） -->
+<div class="modal fade" id="tokenModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-key"></i> 新建 Token</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-warning">
+          <i class="bi bi-exclamation-triangle"></i> 此 Token 明文仅显示一次，请立即复制并妥善保管。
+        </div>
+        <div class="mb-2">
+          <label class="form-label">Token</label>
+          <div class="input-group">
+            <input type="text" class="form-control" id="modal-raw-token" readonly>
+            <button class="btn btn-outline-secondary" type="button" onclick="copyRawToken(document.getElementById('modal-raw-token').value)"><i class="bi bi-clipboard"></i></button>
+          </div>
+        </div>
+        <div class="text-muted small">指纹：<code id="modal-token-fp">-</code></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">已复制并关闭</button>
+      </div>
+    </div>
   </div>
   </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-document.addEventListener('DOMContentLoaded', loadTokens);
+document.addEventListener('DOMContentLoaded', function(){
+  document.getElementById('filter-status').addEventListener('change', loadTokens);
+  loadTokens();
+});
 
 function loadTokens() {
   const alertDiv = document.getElementById('new-token-alert');
@@ -37,20 +79,27 @@ function loadTokens() {
   alertDiv.innerHTML = '';
   fetch('/auth/api/tokens').then(r => r.json()).then(data => {
     if (!data.success) { showToast('获取Token失败', 'error'); return; }
-    const list = data.tokens;
+    let list = data.tokens || [];
+    const status = document.getElementById('filter-status').value;
+    if (status === 'active') list = list.filter(t => t.is_active);
+    if (status === 'inactive') list = list.filter(t => !t.is_active);
     let html = '';
     if (list.length === 0) {
       html = '<div class="text-muted">暂无Token，请新建。</div>';
     } else {
-      html += '<div class="table-responsive"><table class="table"><thead><tr><th>ID</th><th>名称</th><th>创建时间</th><th>最近使用</th><th>状态</th><th>操作</th></tr></thead><tbody>';
+      html += '<div class="table-responsive"><table class="table table-hover table-striped align-middle"><thead class="table-light"><tr><th>ID</th><th>名称</th><th>Scope</th><th>指纹</th><th>创建时间</th><th>过期时间</th><th>最近使用</th><th>状态</th><th>操作</th></tr></thead><tbody>';
       list.forEach(t => {
         html += `<tr>
           <td>${t.id}</td>
           <td>${t.name || '-'}</td>
+          <td><span class="badge bg-secondary">${t.scope || '-'}</span></td>
+          <td><code>${t.fingerprint || '-'}</code></td>
           <td>${t.created_at}</td>
+          <td>${t.expires_at || '-'}</td>
           <td>${t.last_used_at || '-'}</td>
           <td>${t.is_active ? '<span class="badge bg-success">启用</span>' : '<span class="badge bg-secondary">停用</span>'}</td>
           <td>
+            <button class="btn btn-sm btn-outline-secondary me-1" onclick="toggleActive(${t.id}, ${t.is_active ? 'false' : 'true'})">${t.is_active ? '停用' : '启用'}</button>
             <button class="btn btn-sm btn-outline-danger" onclick="deleteToken(${t.id})"><i class="bi bi-trash"></i> 删除</button>
           </td>
         </tr>`;
@@ -68,18 +117,50 @@ function createToken() {
   fetch('/auth/api/tokens', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, scope, ttl_days}) })
     .then(r => r.json()).then(data => {
       if (!data.success) { showToast('创建失败', 'error'); return; }
-      const alertDiv = document.getElementById('new-token-alert');
       const raw = data.raw_token || '';
-      alertDiv.innerHTML = `
-        <strong>请妥善保存此 Token（仅显示一次）：</strong>
-        <code class="user-select-all">${raw}</code>
-        <button class="btn btn-sm btn-outline-secondary ms-2" type="button" onclick="copyRawToken('${raw}')"><i class="bi bi-clipboard"></i> 复制</button>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-      `;
-      alertDiv.style.display = 'block';
-      // 自动隐藏（30秒）
-      setTimeout(() => { try { alertDiv.style.display='none'; alertDiv.innerHTML=''; } catch(e){} }, 30000);
-      loadTokens();
+      // 弹窗显示一次性原文
+      try {
+        document.getElementById('modal-raw-token').value = raw;
+        document.getElementById('modal-token-fp').textContent = (data.token && data.token.fingerprint) ? data.token.fingerprint : '-';
+        const modal = new bootstrap.Modal(document.getElementById('tokenModal'));
+        modal.show();
+      } catch(e) {
+        // 回退到顶部 Alert
+        const alertDiv = document.getElementById('new-token-alert');
+        alertDiv.innerHTML = `
+          <strong>请妥善保存此 Token（仅显示一次）：</strong>
+          <code class="user-select-all">${raw}</code>
+          <button class="btn btn-sm btn-outline-secondary ms-2" type="button" onclick="copyRawToken('${raw}')"><i class="bi bi-clipboard"></i> 复制</button>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        alertDiv.style.display = 'block';
+        setTimeout(() => { try { alertDiv.style.display='none'; alertDiv.innerHTML=''; } catch(e){} }, 30000);
+      }
+      // 创建成功后立即显示到列表顶部（避免等待刷新）
+      try {
+        const c = document.getElementById('tokens-container');
+        if (c && c.querySelector('tbody')) {
+          const t = data.token || {};
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td>${t.id || '-'}</td>
+            <td>${t.name || '-'}</td>
+            <td><span class="badge bg-secondary">${t.scope || '-'}</span></td>
+            <td><code>${t.fingerprint || '-'}</code></td>
+            <td>${t.created_at || '-'}</td>
+            <td>${t.expires_at || '-'}</td>
+            <td>${t.last_used_at || '-'}</td>
+            <td>${t.is_active ? '<span class="badge bg-success">启用</span>' : '<span class="badge bg-secondary">停用</span>'}</td>
+            <td>
+              <button class="btn btn-sm btn-outline-secondary me-1" onclick="toggleActive(${t.id}, ${t.is_active ? 'false' : 'true'})">${t.is_active ? '停用' : '启用'}</button>
+              <button class="btn btn-sm btn-outline-danger" onclick="deleteToken(${t.id})"><i class="bi bi-trash"></i> 删除</button>
+            </td>`;
+          const tbody = c.querySelector('tbody');
+          tbody.insertBefore(row, tbody.firstChild);
+        } else {
+          loadTokens();
+        }
+      } catch(e) { loadTokens(); }
     }).catch(() => showToast('创建失败', 'error'));
 }
 
@@ -91,6 +172,15 @@ function deleteToken(id) {
       showToast('已删除', 'success');
       loadTokens();
     }).catch(() => showToast('删除失败', 'error'));
+}
+
+function toggleActive(id, enable) {
+  fetch('/auth/api/tokens/' + id, { method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({is_active: !!enable}) })
+    .then(r => r.json()).then(data => {
+      if (!data.success) { showToast('更新失败', 'error'); return; }
+      showToast(enable ? '已启用' : '已停用', 'success');
+      loadTokens();
+    }).catch(() => showToast('更新失败', 'error'));
 }
 
 function copyRawToken(v){

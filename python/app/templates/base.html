@@ -85,6 +85,71 @@
         :root[data-theme='dark'] .table {
             color: #e2e2e2;
         }
+        :root[data-theme='dark'] .table thead {
+            background-color: #222;
+        }
+        :root[data-theme='dark'] .table-striped tbody tr:nth-of-type(odd) {
+            background-color: #1a1a1a;
+        }
+        :root[data-theme='dark'] .card-header {
+            background-color: #222;
+            border-bottom-color: #343a40;
+        }
+        :root[data-theme='dark'] .form-control,
+        :root[data-theme='dark'] .form-select,
+        :root[data-theme='dark'] .input-group-text {
+            background-color: #1f1f1f;
+            color: #e2e2e2;
+            border-color: #343a40;
+        }
+        :root[data-theme='dark'] .form-control::placeholder,
+        :root[data-theme='dark'] .form-select::placeholder {
+            color: #9aa4af;
+        }
+        :root[data-theme='dark'] .form-text,
+        :root[data-theme='dark'] .text-muted,
+        :root[data-theme='dark'] .timestamp {
+            color: #b8c1cc !important;
+        }
+        :root[data-theme='dark'] .badge.bg-secondary {
+            background-color: #495057;
+            color: #f1f3f5;
+        }
+        :root[data-theme='dark'] .modal-content {
+            background-color: #1a1a1a;
+            color: #e2e2e2;
+        }
+        :root[data-theme='dark'] .dropdown-menu {
+            background-color: #1a1a1a;
+            color: #e2e2e2;
+            border-color: #343a40;
+        }
+        :root[data-theme='dark'] .dropdown-item { color: #e2e2e2; }
+        :root[data-theme='dark'] .dropdown-item:hover { background-color: #2a2a2a; color: #ffffff; }
+        :root[data-theme='dark'] .toast {
+            background-color: #1f1f1f;
+            color: #e2e2e2;
+        }
+        :root[data-theme='dark'] code {
+            background-color: #2a2a2a;
+            color: #f8f9fa;
+        }
+        :root[data-theme='dark'] a { color: #9ecbff; }
+        :root[data-theme='dark'] .subdomain { background: #2a2a2a; }
+        :root[data-theme='dark'] .log-entry { background: #1b1b1b; }
+        :root[data-theme='dark'] .btn-outline-secondary {
+            color: #cfd8dc;
+            border-color: #607d8b;
+        }
+        :root[data-theme='dark'] .btn-outline-secondary:hover {
+            background-color: #2a2f33;
+            color: #eaf2f7;
+            border-color: #78909c;
+        }
+        :root[data-theme='dark'] .card.bg-light {
+            background-color: #1f1f1f !important;
+            color: #e2e2e2;
+        }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
@@ -146,6 +211,9 @@
                             <li><a class="dropdown-item" href="/auth/tokens">
                                 <i class="bi bi-key"></i> API Token 管理
                             </a></li>
+                            <li><a class="dropdown-item d-none" id="adminUsersLink" href="/auth/users">
+                                <i class="bi bi-people"></i> 用户管理
+                            </a></li>
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="/auth/logout">
                                 <i class="bi bi-box-arrow-right"></i> 登出
@@ -179,7 +247,7 @@
                 <div class="col-md-6 text-md-end">
                     <p class="text-muted mb-0">
                         <i class="bi bi-github"></i>
-                        Built for Security Research
+                        <a href="https://github.com/electronic-monkey/DNSLog-Platform" target="_blank" class="text-reset text-decoration-none">https://github.com/electronic-monkey/DNSLog-Platform</a>
                     </p>
                 </div>
             </div>
@@ -312,6 +380,11 @@
             .then(data => {
                 if (data.success && data.user) {
                     document.getElementById('current-username').textContent = data.user.username;
+                    try {
+                        if (data.user.is_admin) {
+                            document.getElementById('adminUsersLink').classList.remove('d-none');
+                        }
+                    } catch (e) {}
                 }
             })
             .catch(error => {

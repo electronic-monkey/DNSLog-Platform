@@ -161,12 +161,27 @@ let currentPerPage = 50;
 let currentFilters = {};
 let totalPages = 1;
 let autoRefreshTimer = null;
+let autoRefreshEnabled = false;
 
 // 页面加载时初始化
 document.addEventListener('DOMContentLoaded', function() {
     // 设置默认筛选器
     document.getElementById('filter-hours').value = '24';
     
+    // 读取持久化偏好
+    try {
+        const savedPerPage = localStorage.getItem('dnslog_logs_per_page');
+        if (savedPerPage && document.querySelector(`#per-page option[value="${savedPerPage}"]`)) {
+            document.getElementById('per-page').value = savedPerPage;
+            currentPerPage = parseInt(savedPerPage);
+        }
+        const savedAuto = localStorage.getItem('dnslog_logs_auto_refresh');
+        if (savedAuto === '1') {
+            document.getElementById('auto-refresh-toggle').checked = true;
+            autoRefreshEnabled = true;
+        }
+    } catch (e) {}
+
     // 加载日志
     loadLogs();
     
@@ -175,13 +190,36 @@ document.addEventListener('DOMContentLoaded', function() {
         e.preventDefault();
         applyFilters();
     });
+
+    // 启动自动刷新（若启用）
+    if (document.getElementById('auto-refresh-toggle').checked) {
+        startAutoRefresh();
+    }
 });
+
+// 页面可见性变化时暂停/恢复自动刷新
+document.addEventListener('visibilitychange', function() {
+    if (!autoRefreshEnabled) return;
+    if (document.hidden) {
+        if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+        autoRefreshTimer = null;
+    } else {
+        startAutoRefresh();
+    }
+});
+
+function startAutoRefresh() {
+    if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+    // 静默刷新，避免频繁 Toast
+    autoRefreshTimer = setInterval(() => refreshLogs(true), 5000);
+}
 
 function toggleAutoRefresh() {
     const enabled = document.getElementById('auto-refresh-toggle').checked;
+    autoRefreshEnabled = enabled;
+    try { localStorage.setItem('dnslog_logs_auto_refresh', enabled ? '1' : '0'); } catch (e) {}
     if (enabled) {
-        if (autoRefreshTimer) clearInterval(autoRefreshTimer);
-        autoRefreshTimer = setInterval(() => refreshLogs(), 5000);
+        startAutoRefresh();
         showToast('自动刷新已开启', 'success');
     } else {
         if (autoRefreshTimer) clearInterval(autoRefreshTimer);
@@ -404,13 +442,16 @@ function clearFilters() {
 // 改变每页显示数量
 function changePerPage() {
     currentPerPage = parseInt(document.getElementById('per-page').value);
+    try { localStorage.setItem('dnslog_logs_per_page', String(currentPerPage)); } catch (e) {}
     loadLogs(1);
 }
 
 // 刷新日志
-function refreshLogs() {
+function refreshLogs(silent = false) {
     loadLogs(currentPage);
-    showToast('日志已刷新', 'success');
+    if (!silent) {
+        showToast('日志已刷新', 'success');
+    }
 }
 
 // 清空日志

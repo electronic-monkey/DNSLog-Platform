@@ -141,9 +141,15 @@
             <i class="bi bi-clock-history"></i>
             最近DNS日志
         </h5>
-        <button class="btn btn-sm btn-outline-primary" onclick="refreshLogs()">
-            <i class="bi bi-arrow-clockwise"></i> 刷新
-        </button>
+        <div class="d-flex align-items-center gap-2">
+            <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" id="home-auto-refresh-toggle" onchange="toggleHomeAutoRefresh()">
+                <label class="form-check-label" for="home-auto-refresh-toggle">自动刷新</label>
+            </div>
+            <button class="btn btn-sm btn-outline-primary" onclick="refreshLogs()">
+                <i class="bi bi-arrow-clockwise"></i> 刷新
+            </button>
+        </div>
     </div>
     <div class="card-body">
         <div id="recent-logs-container">
@@ -161,11 +167,18 @@
 {% block extra_js %}
 <script>
 let currentDomain = '';
+let homeAutoRefreshTimer = null;
 
 // 页面加载时初始化
 document.addEventListener('DOMContentLoaded', function() {
     refreshStats();
     refreshLogs();
+    // 默认开启自动刷新
+    const tgl = document.getElementById('home-auto-refresh-toggle');
+    if (tgl) {
+        tgl.checked = true;
+        toggleHomeAutoRefresh();
+    }
     
     // 设置表单提交事件
     document.getElementById('generate-form').addEventListener('submit', handleGenerate);
@@ -370,6 +383,20 @@ function copyDomain() {
         copyToClipboard(currentDomain);
     } else {
         showToast('域名信息还未加载', 'warning');
+    }
+}
+
+// 首页自动刷新控制（刷新最近日志与统计）
+function toggleHomeAutoRefresh() {
+    const enabled = document.getElementById('home-auto-refresh-toggle').checked;
+    if (enabled) {
+        if (homeAutoRefreshTimer) clearInterval(homeAutoRefreshTimer);
+        homeAutoRefreshTimer = setInterval(() => { refreshLogs(); refreshStats(); }, 5000);
+        showToast('自动刷新已开启', 'success');
+    } else {
+        if (homeAutoRefreshTimer) clearInterval(homeAutoRefreshTimer);
+        homeAutoRefreshTimer = null;
+        showToast('自动刷新已关闭', 'info');
     }
 }
 

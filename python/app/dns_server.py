@@ -4,7 +4,7 @@ import os
 from datetime import datetime
 from dnslib import DNSRecord, DNSHeader, RR, A, NS, QTYPE
 from dnslib.server import DNSServer, BaseResolver
-from app.models import db, DNSLog, Session
+from app.models import db, DNSLog, Session, GeneratedSubdomain
 from app.config import Config
 import logging
 try:
@@ -96,8 +96,9 @@ class DNSLogResolver(BaseResolver):
                 # 对于其他类型的查询，返回A记录
                 self._handle_a_record(reply, qname)
             
-            # 仅对本域记录到数据库（放在成功构造响应之后）
-            self._log_dns_query(qname, qtype, client_ip)
+            # 仅对白名单中的域名记录
+            if self._is_whitelisted(qname):
+                self._log_dns_query(qname, qtype, client_ip)
                 
         except Exception as e:
             logger.error(f"DNS解析错误: {e}")
@@ -159,6 +160,18 @@ class DNSLogResolver(BaseResolver):
                 db.session.rollback()
             except:
                 pass
+
+    def _is_whitelisted(self, qname: str) -> bool:
+        """检查 full qname 是否在白名单中（大小写不敏感）。"""
+        try:
+            with self.app.app_context():
+                qname_norm = qname.rstrip('.').lower()
+                exists = db.session.query(GeneratedSubdomain.id).filter(
+                    db.func.lower(GeneratedSubdomain.full_domain) == qname_norm
+                ).first()
+                return bool(exists)
+        except Exception:
+            return True  # 失败时保守记录，避免漏报
     
     def _extract_session_id(self, subdomain):
         """从子域名中提取会话ID"""

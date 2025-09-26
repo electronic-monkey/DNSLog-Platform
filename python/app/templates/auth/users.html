@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}用户管理 - DNSLog Platform{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2><i class="bi bi-people"></i> 用户管理</h2>
+  <div class="d-flex gap-2">
+    <input id="u_name" class="form-control" placeholder="用户名" style="max-width:200px;" />
+    <input id="u_pwd" class="form-control" placeholder="初始密码(至少8位含大小写和数字)" style="max-width:260px;" />
+    <div class="form-check form-switch d-flex align-items-center">
+      <input class="form-check-input" type="checkbox" id="u_admin">
+      <label class="form-check-label ms-1" for="u_admin">管理员</label>
+    </div>
+    <button class="btn btn-primary" onclick="createUser()"><i class="bi bi-plus-circle"></i> 创建用户</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <div id="users-container"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', loadUsers);
+
+function loadUsers(){
+  fetch('/auth/api/users').then(r=>r.json()).then(data=>{
+    if(!data.success){ showToast(data.message||'获取用户失败','error'); return; }
+    const list = data.users || [];
+    let html = '';
+    if(list.length === 0){
+      html = '<div class="text-muted">暂无用户</div>';
+    } else {
+      html += '<div class="table-responsive"><table class="table table-hover table-striped align-middle"><thead class="table-light"><tr><th>ID</th><th>用户名</th><th>角色</th><th>状态</th><th>创建时间</th><th>最后登录</th><th>操作</th></tr></thead><tbody>';
+      list.forEach(u=>{
+        html += `<tr>
+          <td>${u.id}</td>
+          <td><code>${u.username}</code></td>
+          <td>${u.is_admin ? '<span class="badge bg-primary">管理员</span>' : '<span class="badge bg-secondary">普通用户</span>'}</td>
+          <td>${u.is_active ? '<span class="badge bg-success">激活</span>' : '<span class="badge bg-danger">停用</span>'}</td>
+          <td>${u.created_at || '-'}</td>
+          <td>${u.last_login || '-'}</td>
+          <td>
+            <div class="btn-group btn-group-sm" role="group">
+              <button class="btn btn-outline-secondary" onclick="toggleActive(${u.id}, ${u.is_active ? 'false':'true'})">${u.is_active ? '停用':'启用'}</button>
+              <button class="btn btn-outline-secondary" onclick="toggleAdmin(${u.id}, ${u.is_admin ? 'false':'true'})">${u.is_admin ? '撤销管理员':'设为管理员'}</button>
+              <button class="btn btn-outline-secondary" onclick="resetPassword(${u.id})">重置密码</button>
+              <button class="btn btn-outline-danger" onclick="deleteUser(${u.id})">删除</button>
+            </div>
+          </td>
+        </tr>`;
+      });
+      html += '</tbody></table></div>';
+    }
+    document.getElementById('users-container').innerHTML = html;
+  }).catch(()=>showToast('获取用户失败','error'));
+}
+
+function createUser(){
+  const username = document.getElementById('u_name').value.trim();
+  const password = document.getElementById('u_pwd').value;
+  const is_admin = document.getElementById('u_admin').checked;
+  if(!username || !password){ showToast('请输入用户名与密码','warning'); return; }
+  if(password.length < 8 || !/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/\d/.test(password)){
+    showToast('密码需至少8位且包含大小写字母与数字','warning');
+    return;
+  }
+  fetch('/auth/api/users',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username,password,is_admin}) })
+    .then(r=>r.json()).then(data=>{
+      if(!data.success){ showToast(data.message||'创建失败','error'); return; }
+      showToast('创建成功','success');
+      document.getElementById('u_name').value='';
+      document.getElementById('u_pwd').value='';
+      document.getElementById('u_admin').checked=false;
+      loadUsers();
+    }).catch(()=>showToast('创建失败','error'));
+}
+
+function toggleActive(id, enable){
+  fetch('/auth/api/users/'+id,{ method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({is_active: !!enable}) })
+    .then(r=>r.json()).then(data=>{ if(!data.success){ showToast(data.message||'更新失败','error'); return; } showToast('已更新','success'); loadUsers(); })
+    .catch(()=>showToast('更新失败','error'));
+}
+
+function toggleAdmin(id, enable){
+  fetch('/auth/api/users/'+id,{ method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({is_admin: !!enable}) })
+    .then(r=>r.json()).then(data=>{ if(!data.success){ showToast(data.message||'更新失败','error'); return; } showToast('已更新','success'); loadUsers(); })
+    .catch(()=>showToast('更新失败','error'));
+}
+
+function resetPassword(id){
+  const newpw = prompt('请输入新密码（至少8位，含大小写和数字）：');
+  if(!newpw){ return; }
+  if(newpw.length < 8 || !/[A-Z]/.test(newpw) || !/[a-z]/.test(newpw) || !/\d/.test(newpw)){
+    showToast('密码不符合要求','warning'); return;
+  }
+  fetch('/auth/api/users/'+id,{ method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({password: newpw}) })
+    .then(r=>r.json()).then(data=>{ if(!data.success){ showToast(data.message||'更新失败','error'); return; } showToast('已重置密码','success'); })
+    .catch(()=>showToast('更新失败','error'));
+}
+
+function deleteUser(id){
+  if(!confirm('确定删除该用户吗？')) return;
+  fetch('/auth/api/users/'+id,{ method:'DELETE' })
+    .then(r=>r.json()).then(data=>{ if(!data.success){ showToast(data.message||'删除失败','error'); return; } showToast('已删除','success'); loadUsers(); })
+    .catch(()=>showToast('删除失败','error'));
+}
+</script>
+{% endblock %}
+
+

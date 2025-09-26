@@ -97,6 +97,47 @@ def create_app():
                 db.session.rollback()
             except Exception:
                 pass
+        # 轻量级自动迁移：为 api_tokens 表补充缺失列（scope, expires_at）与生成白名单表
+        try:
+            engine = db.get_engine()
+            with engine.connect() as conn:
+                try:
+                    rows = conn.exec_driver_sql("PRAGMA table_info(api_tokens);").fetchall()
+                    existing_cols = {str(r[1]) for r in rows}
+                except Exception:
+                    existing_cols = set()
+                if 'scope' not in existing_cols:
+                    try:
+                        conn.exec_driver_sql("ALTER TABLE api_tokens ADD COLUMN scope VARCHAR(64)")
+                        logging.info("自动迁移: 已为 api_tokens 添加列 scope")
+                    except Exception as _e:
+                        logging.warning(f"添加列 scope 失败: {_e}")
+                if 'expires_at' not in existing_cols:
+                    try:
+                        conn.exec_driver_sql("ALTER TABLE api_tokens ADD COLUMN expires_at DATETIME")
+                        logging.info("自动迁移: 已为 api_tokens 添加列 expires_at")
+                    except Exception as _e:
+                        logging.warning(f"添加列 expires_at 失败: {_e}")
+                # 创建 generated_subdomains 表（若不存在）
+                try:
+                    conn.exec_driver_sql(
+                        """
+                        CREATE TABLE IF NOT EXISTS generated_subdomains (
+                            id INTEGER PRIMARY KEY,
+                            subdomain VARCHAR(255) NOT NULL,
+                            domain VARCHAR(255) NOT NULL,
+                            full_domain VARCHAR(512) NOT NULL UNIQUE,
+                            session_id VARCHAR(36),
+                            payload_type VARCHAR(32),
+                            created_at DATETIME NOT NULL
+                        );
+                        """
+                    )
+                    conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS idx_gen_sub_full ON generated_subdomains (full_domain)")
+                except Exception as _e:
+                    logging.warning(f"创建 generated_subdomains 失败: {_e}")
+        except Exception as e:
+            logging.warning(f"自动迁移检查失败: {e}")
         # 确保每个用户有登录安全记录
         try:
             for user in User.query.all():

@@ -132,6 +132,24 @@ class SubdomainGenerator:
             random_suffix = SubdomainGenerator.generate_random_subdomain(8)
             return f"{prefix}-{random_suffix}"
 
+class GeneratedSubdomain(db.Model):
+    """平台生成的子域名白名单"""
+    __tablename__ = 'generated_subdomains'
+
+    id = db.Column(db.Integer, primary_key=True)
+    # 子域名与主域名
+    subdomain = db.Column(db.String(255), nullable=False, index=True)
+    domain = db.Column(db.String(255), nullable=False, index=True)
+    full_domain = db.Column(db.String(512), nullable=False, unique=True, index=True)
+    # 关联会话与类型
+    session_id = db.Column(db.String(36), nullable=True, index=True)
+    payload_type = db.Column(db.String(32), nullable=True)
+    # 时间
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    def __repr__(self):
+        return f'<GeneratedSubdomain {self.full_domain}>'
+
 class User(UserMixin, db.Model):
     """用户模型"""
     __tablename__ = 'users'
@@ -220,7 +238,8 @@ class APIToken(db.Model):
             'last_used_at': self.last_used_at.isoformat() if self.last_used_at else None,
             'is_active': self.is_active,
             'scope': self.scope,
-            'expires_at': self.expires_at.isoformat() if self.expires_at else None
+            'expires_at': self.expires_at.isoformat() if self.expires_at else None,
+            'fingerprint': (self.token_hash[:8] if getattr(self, 'token_hash', None) else None)
         }
 
 class LoginSecurity(db.Model):

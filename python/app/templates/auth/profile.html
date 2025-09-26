@@ -19,7 +19,10 @@
                         <div class="card bg-light">
                             <div class="card-body">
                                 <h6 class="card-title">基本信息</h6>
-                                <p><strong>用户名：</strong> {{ user.username }}</p>
+                                <p class="mb-1"><strong>用户名：</strong> <code>{{ user.username }}</code>
+                                    <button class="btn btn-sm btn-outline-secondary ms-2" onclick="copyToClipboard('{{ user.username }}')"><i class="bi bi-clipboard"></i></button>
+                                </p>
+                                <p class="mb-1"><strong>用户ID：</strong> {{ user.id }}</p>
                                 <p><strong>角色：</strong> 
                                     {% if user.is_admin %}
                                         <span class="badge bg-primary">管理员</span>
@@ -34,7 +37,7 @@
                                         <span class="badge bg-danger">停用</span>
                                     {% endif %}
                                 </p>
-                                <p><strong>注册时间：</strong> {{ user.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+                                <p class="mb-1"><strong>注册时间：</strong> {{ user.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</p>
                                 <p><strong>最后登录：</strong> 
                                     {% if user.last_login %}
                                         {{ user.last_login.strftime('%Y-%m-%d %H:%M:%S') }}
@@ -42,6 +45,12 @@
                                         从未登录
                                     {% endif %}
                                 </p>
+                                <hr>
+                                <div>
+                                    <a class="btn btn-outline-secondary btn-sm" href="/auth/tokens">
+                                        <i class="bi bi-key"></i> 管理 API Token
+                                    </a>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -85,20 +94,28 @@
                     </div>
                     <div class="mb-3">
                         <label for="newPassword" class="form-label">新密码</label>
-                        <input type="password" class="form-control" id="newPassword" required minlength="6">
-                        <div class="form-text">密码至少需要6位字符</div>
+                        <input type="password" class="form-control" id="newPassword" required minlength="8" oninput="renderPwdStrength()">
+                        <div class="form-text">至少 8 位，需包含大写字母、小写字母和数字</div>
+                        <div class="progress mt-2" style="height:6px;">
+                            <div id="pwdStrengthBar" class="progress-bar" role="progressbar" style="width:0%"></div>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label for="confirmPassword" class="form-label">确认新密码</label>
-                        <input type="password" class="form-control" id="confirmPassword" required minlength="6">
+                        <input type="password" class="form-control" id="confirmPassword" required minlength="8">
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="togglePwdVis" onchange="togglePasswordVisibility()">
+                        <label class="form-check-label" for="togglePwdVis">显示密码</label>
                     </div>
                     <div class="mb-3">
                         <div class="alert alert-info">
                             <i class="bi bi-info-circle"></i>
                             <strong>密码要求：</strong>
                             <ul class="mb-0 mt-2">
-                                <li>至少6位字符</li>
-                                <li>建议包含大小写字母、数字和特殊字符</li>
+                                <li>至少 8 位字符</li>
+                                <li>必须包含大写字母、小写字母和数字</li>
+                                <li>建议加入特殊字符增强强度</li>
                             </ul>
                         </div>
                     </div>
@@ -169,6 +186,28 @@ function changePassword() {
         console.error('修改密码失败:', error);
         showToast('网络错误，请重试', 'error');
     });
+}
+
+function togglePasswordVisibility(){
+    const show = document.getElementById('togglePwdVis').checked;
+    document.getElementById('currentPassword').type = show ? 'text' : 'password';
+    document.getElementById('newPassword').type = show ? 'text' : 'password';
+    document.getElementById('confirmPassword').type = show ? 'text' : 'password';
+}
+
+function renderPwdStrength(){
+    const v = document.getElementById('newPassword').value || '';
+    let score = 0;
+    if (v.length >= 8) score += 25;
+    if (/[a-z]/.test(v)) score += 25;
+    if (/[A-Z]/.test(v)) score += 25;
+    if (/\d/.test(v)) score += 25;
+    const bar = document.getElementById('pwdStrengthBar');
+    bar.style.width = Math.min(score, 100) + '%';
+    bar.className = 'progress-bar';
+    if (score < 50) bar.classList.add('bg-danger');
+    else if (score < 75) bar.classList.add('bg-warning');
+    else bar.classList.add('bg-success');
 }
 
 // 表单回车提交
