@@ -1,9 +1,6 @@
 # DNSLog-Platform
 轻量级 DNS 日志平台，用于 SSRF/联通性验证，内置 DNS 服务器、Web UI 与 REST API。
 
-项目地址：`https://github.com/electronic-monkey/DNSLog-Platform`
-
-项目地址：`https://github.com/electronic-monkey/DNSLog-Platform`
 
 ## 界面预览
 首页
@@ -104,6 +101,8 @@ pip install -r requirements.txt
   "LOG_RETENTION_DAYS": 7
 }
 ```
+阿里云域名配置
+<img width="1581" height="681" alt="9c6093cfa1bda9d889f335fcd811b219" src="https://github.com/user-attachments/assets/a7d09c9e-a421-4b0d-9219-1cb400b6e820" />
 
 > 环境变量示例可参考 `.env.example`（不要提交真实机密）。
 
