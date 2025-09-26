@@ -1,28 +1,55 @@
 # DNSLog-Platform
 轻量级 DNS 日志平台，用于 SSRF/联通性验证，内置 DNS 服务器、Web UI 与 REST API。
 
-> 安全提示：请不要将任何包含真实域名、IP、密钥等的配置文件提交到仓库。生产环境配置建议通过环境变量或 `instance/config.json` 提供。
+项目地址：`https://github.com/electronic-monkey/DNSLog-Platform`
+
+项目地址：`https://github.com/electronic-monkey/DNSLog-Platform`
+
+## 界面预览
+首页
+<img width="2556" height="1383" alt="70ac7e1ccafdd894f8be5749b4b9d6d3" src="https://github.com/user-attachments/assets/bb4872b0-0d82-494e-8e01-79d79ed27b0b" />
+日志
+<img width="2559" height="1362" alt="806f59e7aa042ce26959b45a73841dc8" src="https://github.com/user-attachments/assets/f6e5aa5b-fa8e-4998-b47a-26ec1bb0262a" />
+系统设置
+<img width="2559" height="1368" alt="8289182a66d7ec5784ef89a4ab1fe27a" src="https://github.com/user-attachments/assets/f52b9cf1-d30a-47d4-a7be-101158bfddf9" />
+
 
 ## 功能特性
 - 内置权威 DNS 服务（A/NS 记录可配置）
 - Web 管理界面：日志查看、会话管理、系统设置
 - REST API：会话、子域名生成、日志查询、统计信息
 - API Token 管理（Bearer Token）
+- 用户管理（管理员）：创建用户、启/停用、设/撤管理员、重置密码、删除
+- 生成白名单：仅记录“通过平台生成”的子域名的 DNS 查询
+- 系统设置保存即应用（DNS 解析实时生效；Web 监听变更需用新地址访问）
+- 深色模式（右上角切换，自动记忆）
 - 日志保留策略（启动时自动清理）
 - Prometheus 指标 `/metrics`
 
 ## 目录结构
 ```
 SSRF/
-├─ python/               # 应用代码（Flask）
-│  ├─ app/               # 业务逻辑、API、模板
-│  ├─ run.py             # 开发运行入口
-│  └─ requirements.txt   # 依赖
-├─ scripts/              # 启停脚本（gunicorn + 后台 DNS 线程）
-├─ logs/                 # 运行日志（已被 .gitignore 忽略）
-├─ run/                  # 进程 PID 文件（已被 .gitignore 忽略）
-├─ instance/             # 实例配置（已被 .gitignore 忽略）
-└─ LICENSE
+├─ python/                          # 应用根目录
+│  ├─ app/                          # 应用核心
+│  │  ├─ __init__.py               # create_app、扩展初始化、WAL/索引、指标
+│  │  ├─ api.py                    # REST API 与 Web 路由
+│  │  ├─ auth.py                   # 登录/登出、Token、用户管理（管理员）
+│  │  ├─ dns_server.py             # 内置权威 DNS 服务器与解析逻辑
+│  │  ├─ models.py                 # ORM 模型（日志/会话/用户/Token/白名单等）
+│  │  ├─ config.py                 # 配置与 instance/config.json 覆盖
+│  │  ├─ templates/                # 前端模板（首页/日志/会话/设置/认证等）
+│  │  └─ static/                   # 前端静态资源
+│  ├─ run.py                       # 开发运行入口（含横幅与组件启动）
+│  ├─ app.py                       # WSGI 入口（python3 app.py）
+│  └─ requirements.txt             # 依赖
+├─ scripts/                         # 启停脚本（gunicorn + DNS 线程）
+│  ├─ start.sh
+│  └─ stop.sh
+├─ instance/                        # 运行时实例目录（config.json 等）
+├─ logs/                            # 运行日志目录
+├─ run/                             # 运行时 PID 目录
+├─ README.md                        # 项目说明
+└─ LICENSE                          # 许可证
 ```
 
 ## 环境要求
@@ -150,7 +177,7 @@ curl http://<host>:<port>/api/stats
 - 不要暴露管理端口与 API 到公网，或至少加防火墙限制
 - DNS 端口 53 需要 root 权限；或使用非 53 端口并在外部负载/网关层做映射
 - 定期清理历史日志与检查登录行为
-- 切勿将 `.env`、`instance/`、数据库、证书、日志等提交到仓库
+
 
 ## 常见问题
 1) 53 端口权限错误：
